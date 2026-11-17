@@ -370,6 +370,9 @@ func resolveServerIPs(servers []*Server) []string {
 	return out
 }
 
+// Отмена перебора вариантов WARP (выключили WARP или переключились на VPN).
+var warpCancel atomic.Bool
+
 // Ход подключения WARP (показывается в окне); пишется из фоновой задачи — поэтому атомарно.
 var warpStage atomicString
 

@@ -54,3 +54,7 @@ func warpExclude() {}
 
 func warpGUIStart()                          {}
 func zapretDownloadInstall() (string, error) { return "", errNoZapret }
+
+var errWarpCanceled = errors.New("подключение WARP отменено")
+
+func warpExec(args ...string) (string, error) { return "", errNoZapret }

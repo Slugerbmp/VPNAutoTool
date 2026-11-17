@@ -597,7 +597,10 @@ func warpStatus() string {
 
 // Подключение WARP с максимальной совместимостью: текущие настройки, затем MASQUE на разных
 // портах, затем WireGuard на разных портах — пока какой-то вариант не пройдёт.
+var errWarpCanceled = errors.New("подключение WARP отменено")
+
 func warpConnect() error {
+	warpCancel.Store(false)
 	defer warpStage.Store("")
 	warpExclude()
 	// служба WARP могла быть остановлена/отключена (после обновления Windows, «оптимизаторов»
@@ -626,25 +629,36 @@ func warpConnect() error {
 	warpGUIStart()
 	last := ""
 	try := func(label string, secs int) bool {
+		if warpCancel.Load() {
+			return false
+		}
 		warpStage.Store(label)
 		warpExec("connect")
 		for i := 0; i < secs; i++ {
 			time.Sleep(time.Second)
+			if warpCancel.Load() {
+				return false
+			}
 			st := warpStatus()
 			last = st
 			if strings.Contains(st, "Connected") && !strings.Contains(st, "Disconnected") && !strings.Contains(st, "Connecting") {
 				log.Println("WARP подключён:", label)
 				return true
 			}
-			if strings.Contains(st, "Disconnected") && i%4 == 3 {
+			// клиент сам бросил попытку — просим ещё раз (не чаще раза в 6 секунд, иначе он
+			// каждый раз начинает «happy eyeballs» заново и не успевает подключиться)
+			if strings.Contains(st, "Disconnected") && !strings.Contains(st, "Manual") && i%6 == 5 {
 				warpExec("connect")
 			}
 		}
 		log.Printf("WARP (%s) не подключился: %s", label, last)
 		return false
 	}
-	if try("текущие настройки", 14) {
+	if try("текущие настройки", 20) {
 		return nil
+	}
+	if warpCancel.Load() {
+		return errWarpCanceled
 	}
 	type variant struct{ proto, endpoint string }
 	variants := []variant{
@@ -661,6 +675,9 @@ func warpConnect() error {
 		{"WireGuard", "162.159.195.1:2408"},
 	}
 	for _, v := range variants {
+		if warpCancel.Load() {
+			return errWarpCanceled
+		}
 		warpExec("disconnect")
 		warpExec("tunnel", "protocol", "set", v.proto)
 		if v.endpoint == "" {
@@ -668,14 +685,17 @@ func warpConnect() error {
 		} else if _, err := warpExec("tunnel", "endpoint", "set", v.endpoint); err != nil {
 			continue // эта версия клиента не умеет задавать адрес — пропускаем вариант
 		}
-		time.Sleep(2 * time.Second) // клиент применяет настройку
+		time.Sleep(4 * time.Second) // клиент применяет настройку (иначе сам рвёт попытку: «Settings Changed»)
 		label := v.proto
 		if v.endpoint != "" {
 			label += " через " + v.endpoint
 		}
-		if try(label, 12) {
+		if try(label, 20) {
 			return nil
 		}
+	}
+	if warpCancel.Load() {
+		return errWarpCanceled
 	}
 	warpExec("disconnect")
 	warpExec("tunnel", "endpoint", "reset")
@@ -704,7 +724,11 @@ func firstLine(s string) string {
 	return s
 }
 
-func warpDisconnect() { warpExec("disconnect") }
+// Отключить WARP и прервать идущую попытку подключения (перебор вариантов).
+func warpDisconnect() {
+	warpCancel.Store(true)
+	warpExec("disconnect")
+}
 
 // Запустить приложение Cloudflare WARP (значок в трее), если оно установлено и не запущено.
 func warpGUIStart() {

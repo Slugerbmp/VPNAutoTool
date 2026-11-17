@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>VPN Auto</title>
-<link rel="icon" type="image/png" href="/favicon.png?v=1112">
+<link rel="icon" type="image/png" href="/favicon.png?v=1113">
 <meta name="theme-color" id="themeColor" content="#0a0a0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -156,7 +156,7 @@
   <div id="tb"><div class="d" id="tbD">VPN Auto</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
   <div id="grip"></div>
   <header>
-    <img src="/favicon.png?v=1112" alt="">
+    <img src="/favicon.png?v=1113" alt="">
     <span class="t">VPN Auto</span>
     <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
   </header>
@@ -683,7 +683,7 @@ function renderZapret(z){
   const w = z.warp || {};
   const cb = $('warp');
   if (document.activeElement !== cb) cb.checked = !!w.want;
-  cb.disabled = !!w.busy;
+  cb.disabled = !!w.installing; // во время подключения можно выключить — попытка прервётся
   $('warpSum').textContent =
       w.installing ? (w.phase === 'warp-setup' ? 'устанавливаю…' : 'скачиваю' + (w.mbTotal ? ` ${w.mb}/${w.mbTotal} МБ` : '…'))
     : w.busy ? (w.stage ? 'пробую: ' + w.stage : 'подключаю…')

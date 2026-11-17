@@ -188,10 +188,10 @@ func (a *App) zapretOff() {
 		return
 	}
 	zi.mu.Lock()
-	wOn := zi.warpOn
+	wOn, wBusy := zi.warpOn, zi.warpBusy
 	zi.mu.Unlock()
-	if wOn {
-		warpDisconnect()
+	if wOn || wBusy {
+		warpDisconnect() // в том числе прерывает идущую попытку подключения
 	}
 	if winwsRunning() {
 		if _, err := zapretRun(zCmd{Action: "stop"}, 15*time.Second); err != nil {
@@ -204,6 +204,12 @@ func (a *App) zapretOff() {
 func (a *App) warpUp() {
 	zSet(func(z *zInfo) { z.warpBusy, z.warpErr = true, "" })
 	err := warpConnect()
+	if err == errWarpCanceled {
+		warpExec("disconnect")
+		err = nil
+		zSet(func(z *zInfo) { z.warpBusy, z.warpOn, z.warpErr = false, false, "" })
+		return
+	}
 	zSet(func(z *zInfo) {
 		z.warpBusy = false
 		z.warpOn = err == nil
