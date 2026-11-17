@@ -88,6 +88,53 @@ type gateway struct {
 	clients map[netip.Addr]time.Time
 	nTCP    atomic.Int64
 	nUDP    atomic.Int64
+	// интернет компьютера идёт через адаптер локальной сети (нет WARP/VPN-адаптера по умолчанию):
+	// тогда пакеты игр можно отдать Windows — она перешлёт их роутеру как есть
+	lanEgress atomic.Bool
+	egressIP  atomic.Value
+}
+
+// Сервисы игр и платформ: им нужен «домашний» адрес, тот же, что у игрового UDP, —
+// иначе вход по TCP идёт с адреса VPN/WARP, а игра по UDP — с адреса провайдера, и сетевой
+// режим игры не запускается.
+var gameHosts = []string{
+	"playstation.net", "playstation.com", "sonyentertainmentnetwork.com", "scea.com", "sie.com",
+	"2k.com", "2kgames.com", "take2games.com", "t2.com",
+	"ea.com", "eagames.com", "origin.com", "tnt-ea.com",
+	"ubi.com", "ubisoft.com", "epicgames.com", "epicgames.dev", "unrealengine.com",
+	"activision.com", "callofduty.com", "demonware.net", "battle.net", "blizzard.com",
+	"rockstargames.com", "riotgames.com", "nintendo.net", "steamserver.net", "playfabapi.com",
+}
+
+func isGameHost(host string) bool { return hostBypassed(host, gameHosts) }
+
+// nativeTCP — соединение от компьютера мимо WARP/VPN, через роутер (адрес компьютера в сети).
+func (g *gateway) nativeTCP(target string) (net.Conn, error) {
+	d := net.Dialer{Timeout: 10 * time.Second, LocalAddr: &net.TCPAddr{IP: net.IP(g.pc.AsSlice())}}
+	return d.Dial("tcp4", target)
+}
+
+func (g *gateway) nativeUDP(dst netip.AddrPort) (udpUpstream, error) {
+	u, err := net.DialUDP("udp4", &net.UDPAddr{IP: net.IP(g.pc.AsSlice())}, net.UDPAddrFromAddrPort(dst))
+	if err != nil {
+		return nil, err
+	}
+	return &directUDP{u}, nil
+}
+
+// checkEgress — через какой адаптер компьютер выходит в интернет.
+func (g *gateway) checkEgress() {
+	u, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.IPv4(1, 1, 1, 1), Port: 53})
+	if err != nil {
+		return
+	}
+	la := u.LocalAddr().(*net.UDPAddr)
+	u.Close()
+	lan := la.IP.Equal(net.IP(g.pc.AsSlice()))
+	if prev := g.egressIP.Swap(la.IP.String()); prev != la.IP.String() {
+		g.lanEgress.Store(lan)
+		gwLog("выход в интернет: %s (%s)", la.IP, map[bool]string{true: "локальная сеть", false: "WARP/VPN — игры пойдут мимо него"}[lan])
+	}
 }
 
 func newGateway(pc netip.Addr, io pktIO) *gateway {
@@ -135,8 +182,9 @@ func (g *gateway) onForward(b []byte) bool {
 		g.io.Inject(p.b, false) // как будто пришло компьютеру
 		return true
 	case 17:
-		if c.GamesDir && !gwUDPImportant(p.dp) {
-			return false // игры по UDP — напрямую через роутер
+		native := c.GamesDir && !gwUDPImportant(p.dp)
+		if native && g.lanEgress.Load() {
+			return false // игры по UDP — Windows пересылает роутеру как есть (лучший тип NAT)
 		}
 		payload := append([]byte(nil), p.payload()...)
 		key := cl.String() + ">" + dst.String()
@@ -144,7 +192,13 @@ func (g *gateway) onForward(b []byte) bool {
 		f := g.udp[key]
 		g.mu.Unlock()
 		if f == nil {
-			up, err := g.udpDial(c, dst)
+			var up udpUpstream
+			var err error
+			if native { // интернет компьютера идёт через WARP/VPN — игры отправляем мимо него
+				up, err = g.nativeUDP(dst)
+			} else {
+				up, err = g.udpDial(c, dst)
+			}
 			if err != nil {
 				return true // молча теряем: UDP переживёт
 			}
@@ -323,6 +377,12 @@ func (g *gateway) tcpDial(host string, dst netip.AddrPort) (net.Conn, error) {
 	target := dst.String()
 	if host != "" && net.ParseIP(host) == nil {
 		target = net.JoinHostPort(host, fmt.Sprint(dst.Port())) // по имени — без подменённых провайдером адресов
+	}
+	// игры: соединения без имени (свои протоколы игр) и сервисы платформ — с домашнего адреса
+	if c.GamesDir && (host == "" || isGameHost(host)) && !(host != "" && isGeoHost(host)) {
+		if up, err := g.nativeTCP(target); err == nil {
+			return up, nil
+		}
 	}
 	var ports []int
 	switch {

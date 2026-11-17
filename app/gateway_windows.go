@@ -154,7 +154,8 @@ func gatewayMain() {
 	if err != nil {
 		fail("перехват ответов не включился: " + err.Error())
 	}
-	gwLog("запущен: компьютер %s, интерфейс %d, режим %s", pc, c.IfIdx, c.Mode)
+	gwLog("запущен: компьютер %s, интерфейс %d, режим %s, игры напрямую: %v", pc, c.IfIdx, c.Mode, c.GamesDir)
+	g.checkEgress()
 
 	go g.serveTCP(ln)
 	go g.janitor()
@@ -209,6 +210,7 @@ func gatewayMain() {
 		writeGWState(g.state(""))
 		if tick++; tick%10 == 0 { // включили WARP/VPN — его адаптеру тоже нужна пересылка
 			gwEnableForwarding(nc.IfIdx)
+			g.checkEgress()
 		}
 	}
 }
