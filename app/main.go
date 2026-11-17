@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.11.0"
+	appVersion = "1.11.1"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -167,7 +167,14 @@ func main() {
 			logName = "gateway.log"
 		}
 	}
-	if lf, err := os.OpenFile(filepath.Join(dataDir, logName), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644); err == nil {
+	flags := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
+	if logName != "app.log" { // журналы служебных процессов дописываем (задача запускается на каждую команду)
+		flags = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+		if st, err := os.Stat(filepath.Join(dataDir, logName)); err == nil && st.Size() > 1<<20 {
+			flags |= os.O_TRUNC
+		}
+	}
+	if lf, err := os.OpenFile(filepath.Join(dataDir, logName), flags, 0644); err == nil {
 		log.SetOutput(lf)
 	}
 

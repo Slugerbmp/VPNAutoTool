@@ -29,7 +29,7 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-const version = "1.11.0"
+const version = "1.11.1"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
@@ -177,19 +177,37 @@ func main() {
 		return
 	}
 	var err error
+	renamed := "" // старая копия, отодвинутая в сторону (на случай, если новую записать не выйдет)
 	for i := 0; i < 6; i++ {
 		if err = os.WriteFile(exe, appExe, 0755); err == nil {
 			break
 		}
 		// файл занят запущенной копией: запущенный exe нельзя перезаписать, но можно переименовать
-		if i >= 1 {
+		if i >= 1 && renamed == "" {
 			old := filepath.Join(dir, fmt.Sprintf("VPNAuto.old-%d.exe", time.Now().UnixNano()))
 			if os.Rename(exe, old) == nil {
-				hidden("cmd", "/c", "ping -n 30 127.0.0.1 >nul & del /f /q \""+old+"\"").Start() // убрать позже
+				renamed = old
 				continue
 			}
 		}
 		time.Sleep(time.Second)
+	}
+	if err != nil && renamed != "" {
+		os.Rename(renamed, exe) // новую записать не удалось — возвращаем старую, чтобы программа не пропала
+		renamed = ""
+	}
+	if err == nil && renamed != "" {
+		hidden("cmd", "/c", "ping -n 30 127.0.0.1 >nul & del /f /q \""+renamed+"\"").Start() // убрать позже
+	}
+	if err == nil {
+		// антивирус может удалить файл сразу после записи — тогда ярлыки остаются без значка
+		time.Sleep(1500 * time.Millisecond)
+		if !fileExists(exe) {
+			msgBox("Антивирус удалил файл программы сразу после установки (ложное срабатывание).\n\n"+
+				"Откройте «Безопасность Windows» → «Защита от вирусов и угроз» → «Журнал защиты», восстановите VPNAuto.exe "+
+				"и добавьте папку\n"+dir+"\nв исключения («Управление настройками» → «Исключения»). Затем запустите установку ещё раз.", 0x30)
+			return
+		}
 	}
 	if err != nil {
 		fail(dir, err)

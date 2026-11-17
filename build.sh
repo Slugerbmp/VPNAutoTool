@@ -28,8 +28,9 @@ cp assets/icon.ico setup/icon.ico
 go test ./app
 
 # Windows
-GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H=windowsgui -s -w" -o setup/VPNAuto.exe ./app
-(cd setup && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H=windowsgui -s -w" -o ../dist/VPN-Auto-Setup.exe .)
+# без -s -w: неурезанные exe реже получают «эвристические» ложные срабатывания антивирусов
+GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H=windowsgui" -o setup/VPNAuto.exe ./app
+(cd setup && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-H=windowsgui" -o ../dist/VPN-Auto-Setup.exe .)
 rm -f setup/VPNAuto.exe
 
 # macOS (Intel + Apple Silicon в одном файле)
