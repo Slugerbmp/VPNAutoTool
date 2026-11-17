@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.12.9"
+	appVersion = "1.13.0"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -1357,6 +1357,7 @@ func (a *App) routes() *http.ServeMux {
 	frameRoutes(m)
 	a.updateRoutes(m)
 	a.repairRoutes(m)
+	a.logsRoutes(m)
 	m.HandleFunc("/api/closing", func(w http.ResponseWriter, r *http.Request) {
 		a.mu.Lock()
 		a.closingAt = time.Now()

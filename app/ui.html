@@ -281,6 +281,7 @@
         <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
         <div class="row"><button class="btn" id="repBtn">Починить файлы</button><span class="note" style="margin:0 0 0 10px">скачает недостающее и исправит то, что удалил антивирус</span></div>
         <pre id="repLog" hidden></pre>
+        <div class="row"><button class="btn" id="logBtn">Скачать журналы</button><span class="note" id="logNote" style="margin:0 0 0 10px">архив появится в «Загрузках» — отправьте его разработчику (ключи подписки в него не попадают)</span></div>
         <div class="row" id="defRow"><button class="lnk" id="defBtn">Добавить NETtool в исключения Защитника Windows</button><span class="note" id="defNote" style="margin:0 0 0 8px"></span></div>
         <div class="note" id="avNote" hidden></div>
       </div>
@@ -834,6 +835,12 @@ async function repPoll(){
   if (r.busy) setTimeout(repPoll, 1000); else tick();
 }
 $('repBtn').onclick = async () => { await api('repair', {start: true}); repPoll(); };
+$('logBtn').onclick = async () => {
+  const b = $('logBtn'); b.disabled = true; b.textContent = 'Собираю…';
+  const r = await api('logs', {});
+  b.disabled = false; b.textContent = 'Скачать журналы';
+  $('logNote').textContent = r && r.ok ? 'Сохранено: ' + r.path + ' — папка открыта, файл можно отправить в Telegram' : 'Не получилось: ' + ((r && r.error) || 'ошибка');
+};
 $('defBtn').onclick = async () => {
   $('defNote').textContent = 'Подтвердите запрос Windows…';
   const r = await api('defender', {});
