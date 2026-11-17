@@ -58,3 +58,6 @@ func zapretDownloadInstall() (string, error) { return "", errNoZapret }
 var errWarpCanceled = errors.New("подключение WARP отменено")
 
 func warpExec(args ...string) (string, error) { return "", errNoZapret }
+func defenderExclude() error                  { return errNoZapret }
+func psQuote(s string) string                 { return s }
+func defenderRefresh()                        {}

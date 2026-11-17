@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.12.0"
+	appVersion = "1.12.1"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -188,6 +188,13 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--zapret-setup" {
+		// галочка установщика «исключения Защитника» — сначала она, иначе Защитник удалит запрет сразу
+		if pd := filepath.Join(dataDir, "pending-defender"); func() bool { _, e := os.Stat(pd); return e == nil }() {
+			os.Remove(pd)
+			if err := defenderExclude(); err != nil {
+				msgBox(err.Error(), 0x30)
+			}
+		}
 		if len(os.Args) > 2 { // архив запрета передан явно
 			if data, err := os.ReadFile(os.Args[2]); err == nil {
 				if _, err := extractZapretZip(data, zapretDir()); err != nil {
@@ -207,6 +214,12 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--defender" { // исключения Защитника (запуск с правами администратора)
+		if err := defenderExclude(); err != nil {
+			msgBox(err.Error(), 0x30)
+		}
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--autostart" {
 		autostartLaunch = true
 	}
@@ -220,6 +233,13 @@ func main() {
 	}
 
 	ln, err := net.Listen("tcp", uiAddr)
+	if err != nil && len(os.Args) > 1 && os.Args[1] == "--updated" {
+		// после обновления старая копия может ещё завершаться — ждём, пока освободит порт
+		for i := 0; i < 40 && err != nil; i++ {
+			time.Sleep(500 * time.Millisecond)
+			ln, err = net.Listen("tcp", uiAddr)
+		}
+	}
 	if err != nil {
 		// уже запущено — показываем окно той копии
 		openOrFocusUI()
@@ -248,6 +268,7 @@ func main() {
 	go app.hotspotInit()
 	go app.gatewayLoop()
 	go app.updater()
+	go defenderRefresh()
 	go app.geoLoop() // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
 	go app.tgwsLoop()
 	go warpGUIStart() // значок Cloudflare WARP в трее вместе с нашим
@@ -264,6 +285,13 @@ func main() {
 		hotkeySet(app.optHotkey())
 	}
 	go app.trayUpdater()
+	if len(os.Args) > 1 && os.Args[1] == "--updated" {
+		app.setEvent("NETtool обновлён до версии " + appVersion)
+		go func() {
+			time.Sleep(3 * time.Second)
+			notify("NETtool", "Обновлено до версии "+appVersion)
+		}()
+	}
 	go func() {
 		if autostartLaunch && trayOK {
 			return // при автозапуске окно не показываем — программа в трее

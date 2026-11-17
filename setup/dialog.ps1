@@ -12,7 +12,7 @@ $fBig   = New-Object System.Drawing.Font('Segoe UI', 22, [System.Drawing.FontSty
 $fMono  = New-Object System.Drawing.Font('Consolas', 9)
 function Spaced($s, [switch]$Keep) { $t = if ($Keep) { $s } else { $s.ToUpper() }; ($t.ToCharArray() -join [char]0x200A) }  # разрядка, как в интерфейсе
 
-$W = 540; $H = 470
+$W = 540; $H = 500
 $f = New-Object System.Windows.Forms.Form
 $f.Text = 'Установка NETtool ' + $env:VA_VER
 $f.FormBorderStyle = 'None'; $f.ClientSize = New-Object System.Drawing.Size($W, $H)
@@ -115,14 +115,15 @@ Check 'auto' 'Запускать с Windows — сразу включается 
 Check 'zap'  'Запрет (Zapret) — обход блокировок без VPN' 326 ($env:VA_ZAP -eq '1')
 Check 'warp' 'Cloudflare WARP — скачается ~130 МБ, будет обновляться' 352 ($env:VA_WARP -eq '1')
 Check 'tg'   'TG WS Proxy — ускорение Telegram' 378 ($env:VA_TG -eq '1')
+Check 'def'  'Добавить в исключения Защитника Windows (рекомендуется)' 404 ($env:VA_DEF -eq '1')
 
-[void](Line 418)
-$ok = Btn (Spaced $env:VA_BTN) ($W - 24 - 140 - 10 - 100) 428 140 $true
-$cancel = Btn (Spaced 'Отмена') ($W - 24 - 100) 428 100 $false
+[void](Line 448)
+$ok = Btn (Spaced $env:VA_BTN) ($W - 24 - 140 - 10 - 100) 458 140 $true
+$cancel = Btn (Spaced 'Отмена') ($W - 24 - 100) 458 100 $false
 $ok.Add_Click({
     if (-not $tb.Text.Trim()) { return }
     $k = $script:checks
-    $lines = @($tb.Text.Trim(), [int]$k.desk.On, [int]$k.run.On, [int]$k.zap.On, [int]$k.warp.On, [int]$k.tg.On, [int]$k.auto.On)
+    $lines = @($tb.Text.Trim(), [int]$k.desk.On, [int]$k.run.On, [int]$k.zap.On, [int]$k.warp.On, [int]$k.tg.On, [int]$k.auto.On, [int]$k.def.On)
     [IO.File]::WriteAllLines($env:VA_OUT, [string[]]$lines, (New-Object Text.UTF8Encoding $false))
     $f.Close()
 })

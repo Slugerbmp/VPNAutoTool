@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -802,6 +803,23 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 			go zapretRun(zCmd{Action: "start", Strategy: strategy, Warp: warp}, 25*time.Second)
 		}
 		writeJSON(w, map[string]any{"ok": true, "list": list})
+	})
+	m.HandleFunc("/api/defender", func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		if zapretTaskExists() {
+			_, err = zapretRun(zCmd{Action: "defender"}, 60*time.Second)
+		} else {
+			exe, _ := os.Executable()
+			ps := `Start-Process -FilePath ` + psQuote(exe) + ` -ArgumentList '--defender' -Verb RunAs -Wait`
+			if e := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run(); e != nil {
+				err = errors.New("нужно разрешение администратора")
+			}
+		}
+		if err != nil {
+			writeJSON(w, map[string]any{"ok": false, "error": err.Error()})
+			return
+		}
+		writeJSON(w, map[string]any{"ok": true})
 	})
 	m.HandleFunc("/api/gateway", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {

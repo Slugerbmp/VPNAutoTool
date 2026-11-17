@@ -29,7 +29,7 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-const version = "1.12.0"
+const version = "1.12.1"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
@@ -117,6 +117,7 @@ func main() {
 		tgDef = "1"
 	}
 	wantTg, wantAuto := false, true
+	wantDef := false // исключения Защитника — по галочке в окне установщика (при тихом обновлении программа обновит их сама)
 	dir, wantDesk, wantRun, wantZap, wantWarp := defDir, true, true, zap == "1", false
 	// --silent: автообновление из программы — без окна, с текущими настройками,
 	// без запросов прав администратора (запрет, WARP и TG WS Proxy уже стоят и обновляются сами)
@@ -128,7 +129,7 @@ func main() {
 		// только без консоли; HideWindow тут нельзя — Windows спрятала бы и само окно установщика
 		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
 		cmd.Env = append(os.Environ(), "VA_VER="+version, "VA_ICO="+tmpIco, "VA_DIR="+defDir, "VA_DESK="+desk,
-			"VA_OUT="+outFile, "VA_MODE="+mode, "VA_BTN="+btn, "VA_ZAP="+zap, "VA_WARP="+warpDef, "VA_TG="+tgDef)
+			"VA_OUT="+outFile, "VA_MODE="+mode, "VA_BTN="+btn, "VA_ZAP="+zap, "VA_WARP="+warpDef, "VA_TG="+tgDef, "VA_DEF=1")
 		if err := cmd.Run(); err != nil {
 			// окно не открылось — упрощённый вариант
 			if msgBox(btn+" NETtool "+version+"?\n\nПапка: "+defDir, 0x4|0x20) != 6 {
@@ -150,6 +151,7 @@ func main() {
 			wantWarp = len(lines) > 4 && strings.TrimSpace(lines[4]) == "1"
 			wantTg = len(lines) > 5 && strings.TrimSpace(lines[5]) == "1"
 			wantAuto = len(lines) > 6 && strings.TrimSpace(lines[6]) == "1"
+			wantDef = len(lines) > 7 && strings.TrimSpace(lines[7]) == "1"
 			if wantWarp {
 				wantZap = true
 			}
@@ -161,9 +163,13 @@ func main() {
 		dir = filepath.Join(dir, "NETtool")
 	}
 	exe := filepath.Join(dir, "VPNAuto.exe")
-	// значок берём прямо из VPNAuto.exe: путь не меняется между версиями, поэтому ярлыки
-	// и закрепления в «Пуске» и на панели задач не теряют значок после обновления
-	ico := exe
+	// Значок — отдельным файлом с постоянным именем в папке данных на диске C:
+	// (папка программы может быть на сетевом/съёмном диске, оттуда «Пуск» значки не берёт;
+	// постоянное имя — чтобы закреплённые ярлыки не теряли значок после обновлений)
+	icoDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+	os.MkdirAll(icoDir, 0755)
+	ico := filepath.Join(icoDir, "NETtool.ico")
+	os.WriteFile(ico, appIcon, 0644)
 
 	// закрываем запущенную программу, чтобы заменить файл
 	dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
@@ -242,8 +248,8 @@ func main() {
 		// закреплённые ярлыки (панель задач, «Пуск»), созданные пользователем, — тоже на значок из exe
 		`$pin=Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned';`+
 		`Get-ChildItem -LiteralPath $pin -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object {`+
-		`$s=$w.CreateShortcut($_.FullName); if($s.TargetPath -ieq `+psq(exe)+`){$s.IconLocation=`+psq(exe+",0")+`;$s.Save()}};`,
-		psq(exe), psq(dir), psq(exe+",0"))
+		`$s=$w.CreateShortcut($_.FullName); if($s.TargetPath -ieq `+psq(exe)+`){$s.IconLocation=`+psq(ico+",0")+`;$s.Save()}};`,
+		psq(exe), psq(dir), psq(ico+",0"))
 	runPS(ps)
 
 	for _, kv := range [][3]string{
@@ -261,6 +267,17 @@ func main() {
 
 	hidden("ie4uinit.exe", "-show").Run() // обновить кэш значков (ярлыки, панель задач)
 
+	if wantDef {
+		// исключения Защитника — в том же запуске с правами администратора, что и запрет;
+		// если запрет не выбран — отдельным запросом
+		dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+		os.MkdirAll(dd, 0755)
+		if wantZap {
+			os.WriteFile(filepath.Join(dd, "pending-defender"), []byte("1"), 0644)
+		} else {
+			runPS(fmt.Sprintf(`Start-Process -FilePath %s -ArgumentList '--defender' -Verb RunAs -Wait`, psq(exe)))
+		}
+	}
 	if wantZap {
 		// распаковка запрета и задача для запуска без UAC — один запрос прав администратора
 		// сам запрет программа скачает с GitHub автора (в установщик не вшиваем — антивирусы ругаются на WinDivert)
@@ -296,6 +313,9 @@ func main() {
 
 	if wantRun {
 		c := exec.Command(exe)
+		if updating {
+			c = exec.Command(exe, "--updated") // новая копия подождёт, пока старая освободит порт
+		}
 		c.Dir = dir
 		c.Start()
 	} else {

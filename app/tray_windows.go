@@ -589,4 +589,12 @@ func closeUIWindows() {
 }
 
 // Значок окна на панели задач — из самого exe (ресурс №1): путь не меняется при обновлениях.
-func relaunchIcon(exe string) string { return exe + ",-1" }
+// (файл значка в папке данных на диске C: — папка программы может быть на другом диске)
+func relaunchIcon(exe string) string {
+	if p := filepath.Join(dataDir, "NETtool.ico"); fileExistsW(p) {
+		return p + ",0"
+	}
+	return exe + ",-1"
+}
+
+func fileExistsW(p string) bool { _, err := os.Stat(p); return err == nil }

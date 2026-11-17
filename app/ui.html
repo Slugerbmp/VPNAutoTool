@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>NETtool</title>
-<link rel="icon" type="image/png" href="/favicon.png?v=1120">
+<link rel="icon" type="image/png" href="/favicon.png?v=1121">
 <meta name="theme-color" id="themeColor" content="#0a0a0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -156,7 +156,7 @@
   <div id="tb"><div class="d" id="tbD">NETtool</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
   <div id="grip"></div>
   <header>
-    <img src="/favicon.png?v=1120" alt="">
+    <img src="/favicon.png?v=1121" alt="">
     <span class="t">NETtool</span>
     <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
   </header>
@@ -279,6 +279,7 @@
         <div class="note">Программа</div><pre id="logApp">…</pre>
         <div class="note" id="logZt" hidden>Запрет</div><pre id="logZap" hidden></pre>
         <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
+        <div class="row" id="defRow"><button class="lnk" id="defBtn">Добавить NETtool в исключения Защитника Windows</button><span class="note" id="defNote" style="margin:0 0 0 8px"></span></div>
       </div>
     </section>
   </div>
@@ -680,6 +681,7 @@ function renderZapret(z){
   if (document.activeElement !== $('zxIn')) $('zxIn').value = (st.zextra || []).join('\n');
   $('zVer').textContent = z.installed ? 'Версия ' + (z.version || '?') + (z.latest && z.latest !== z.version ? ' · выходит ' + z.latest + ', обновлю сам' : ' · актуальная') : '';
 
+  $('defRow').hidden = !z.supported;
   const w = z.warp || {};
   const cb = $('warp');
   if (document.activeElement !== cb) cb.checked = !!w.want;
@@ -802,6 +804,11 @@ $('mTg').onchange = async e => { const r = await api('tgws', {on: e.target.check
 $('mHs').onchange = async e => { await api('hotspot', {on: e.target.checked}); tick(); };
 $('mFull').onclick = () => { api('full', {}); setTimeout(() => window.close(), 300); };
 $('logOpen').onclick = () => api('openlogs', {});
+$('defBtn').onclick = async () => {
+  $('defNote').textContent = 'Подтвердите запрос Windows…';
+  const r = await api('defender', {});
+  $('defNote').textContent = r && r.ok ? 'готово — Защитник больше не будет трогать программу и запрет' : '⚠ ' + ((r && r.error) || 'не получилось');
+};
 $('logRef').onclick = loadLogs;
 $('quit').onclick = async () => {
   if (!confirm('Выйти из NETtool? Всё будет выключено.')) return;

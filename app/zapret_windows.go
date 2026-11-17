@@ -218,6 +218,8 @@ func zapretTaskMain() {
 		runErr = gatewayStartElevated(c.IfIdx)
 	case "gateway-off":
 		gatewayStopElevated(c.IfIdx)
+	case "defender":
+		runErr = defenderExclude()
 	case "firewall":
 		exe, _ := os.Executable()
 		hiddenCmd("netsh", "advfirewall", "firewall", "delete", "rule", "name=VPN Auto hotspot").Run()
@@ -751,5 +753,50 @@ func warpGUIStart() {
 }
 
 const warpDownloadURL = "https://1.1.1.1/"
+
+// Добавить папки программы в исключения Защитника Windows (с согласия пользователя:
+// галочка в установщике или кнопка в программе). Без этого Защитник нередко удаляет
+// winws.exe/WinDivert (запрет) и саму программу как «подозрительные» — ложное срабатывание.
+func defenderExclude() error {
+	exe, _ := os.Executable()
+	paths := []string{filepath.Dir(exe), dataDir}
+	var q []string
+	for _, p := range paths {
+		q = append(q, psQuote(p))
+	}
+	ps := "Add-MpPreference -ExclusionPath " + strings.Join(q, ",") + " -ErrorAction Stop"
+	out, err := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).CombinedOutput()
+	if err != nil {
+		s := strings.TrimSpace(string(out))
+		if strings.Contains(s, "0x800106ba") || strings.Contains(strings.ToLower(s), "not running") {
+			return errors.New("Защитник Windows выключен или заменён другим антивирусом — добавьте папки в исключения своего антивируса вручную")
+		}
+		return fmt.Errorf("не удалось добавить исключения: %s", firstLine(s))
+	}
+	log.Println("исключения Защитника добавлены:", strings.Join(paths, "; "))
+	os.WriteFile(filepath.Join(dataDir, "defender-on"), []byte(strings.Join(paths, "\n")), 0644) // согласие дано — обновлять при обновлениях
+	return nil
+}
+
+// После обновления (из программы или установщиком) — заново прописать исключения Защитника,
+// если пользователь на них соглашался: пути могли измениться, а Защитник мог их сбросить.
+func defenderRefresh() {
+	b, err := os.ReadFile(filepath.Join(dataDir, "defender-on"))
+	if err != nil {
+		return
+	}
+	exe, _ := os.Executable()
+	updated := len(os.Args) > 1 && os.Args[1] == "--updated"
+	if !updated && strings.Contains(string(b), filepath.Dir(exe)) {
+		return // пути не менялись
+	}
+	time.Sleep(20 * time.Second)
+	if !zapretTaskExists() {
+		return // без задачи нужен запрос UAC — не беспокоим, есть кнопка в «Диагностике»
+	}
+	if _, err := zapretRun(zCmd{Action: "defender"}, 60*time.Second); err != nil {
+		log.Println("исключения Защитника:", err)
+	}
+}
 
 func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
