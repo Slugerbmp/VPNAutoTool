@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.12.5"
+	appVersion = "1.12.6"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -162,7 +162,7 @@ func main() {
 	logName := "app.log"
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
-		case "--zapret-task":
+		case "--zapret-task", "--admin-agent":
 			logName = "zapret-task.log"
 		case "--gateway":
 			logName = "gateway.log"
@@ -181,6 +181,10 @@ func main() {
 
 	if len(os.Args) > 1 && os.Args[1] == "--zapret-task" { // исполнитель с правами администратора
 		zapretTaskMain()
+		return
+	}
+	if len(os.Args) > 2 && os.Args[1] == "--admin-agent" { // помощник с правами администратора на сеанс
+		adminAgentMain(os.Args[2])
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--gateway" { // режим шлюза (с правами администратора)
@@ -270,8 +274,9 @@ func main() {
 	go app.updater()
 	go app.connWatch()
 	go defenderRefresh()
-	go ensureShortcut() // ярлык в «Пуске» + свой AppUserModelID (значок на панели задач)
-	go app.geoLoop()    // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
+	go adminAgentAtStart() // права администратора — один раз при запуске, а не на каждую кнопку
+	go ensureShortcut()    // ярлык в «Пуске» + свой AppUserModelID (значок на панели задач)
+	go app.geoLoop()       // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
 	go app.tgwsLoop()
 	go warpGUIStart() // значок Cloudflare WARP в трее вместе с нашим
 	go app.notifier()

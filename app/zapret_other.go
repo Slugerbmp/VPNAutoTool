@@ -65,3 +65,10 @@ func defenderRefresh()                        {}
 func installedAV() []string                   { return nil }
 func zapretFilesOK() bool                     { return false }
 func repairShortcut(string) bool              { return false }
+
+func agentAlive() bool        { return false }
+func startAgent() bool        { return false }
+func adminAgentAtStart()      {}
+func adminAgentMain(string)   {}
+func lnkSetAUMID(string) bool { return false }
+func fileExistsW(string) bool { return false }

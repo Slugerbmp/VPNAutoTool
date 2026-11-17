@@ -822,7 +822,7 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 	})
 	m.HandleFunc("/api/defender", func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		if zapretTaskExists() {
+		if agentAlive() || zapretTaskExists() || startAgent() {
 			_, err = zapretRun(zCmd{Action: "defender"}, 60*time.Second)
 		} else {
 			exe, _ := os.Executable()

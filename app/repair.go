@@ -209,4 +209,11 @@ func ensureShortcut() {
 	if repairShortcut(ico) {
 		log.Printf("ярлык NETtool в «Пуске» пересоздан")
 	}
+	// закреплённый на панели задач значок — тот же ID, иначе окно открывается отдельной кнопкой
+	pinned := filepath.Join(os.Getenv("APPDATA"), `Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar`)
+	for _, n := range []string{"NETtool.lnk", "VPN Auto.lnk"} {
+		if p := filepath.Join(pinned, n); fileExistsW(p) {
+			lnkSetAUMID(p)
+		}
+	}
 }

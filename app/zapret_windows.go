@@ -146,25 +146,11 @@ func zapretSetupTask() error {
 	return nil
 }
 
-// Из обычной программы: один раз спросить UAC и создать задачу.
-var taskRecreated time.Time
-
-// Пересоздать задачу запуска запрета (не чаще раза в 10 минут — каждый раз спрашивает UAC).
-func zapretRecreateTask() error {
-	if time.Since(taskRecreated) < 10*time.Minute {
-		return errors.New("задачу уже пересоздавали")
-	}
-	taskRecreated = time.Now()
-	exe, _ := os.Executable()
-	ps := fmt.Sprintf(`Start-Process -FilePath '%s' -ArgumentList '--zapret-setup' -Verb RunAs -Wait`, strings.ReplaceAll(exe, "'", "''"))
-	if err := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run(); err != nil {
-		return errors.New("нужно разрешение администратора")
-	}
-	return nil
-}
-
 func zapretEnsureTask() error {
-	if zapretTaskExists() {
+	if agentAlive() || zapretTaskExists() {
+		return nil
+	}
+	if startAgent() {
 		return nil
 	}
 	exe, _ := os.Executable()
@@ -195,22 +181,31 @@ func zapretRun(c zCmd, wait time.Duration) (zState, error) {
 	c.VPNIPs = vpnServerIPs
 	c.Extra = zapretExtra
 	writeJSONFile(zCmdPath(), c)
-	out, err := hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
-	if err != nil {
-		// задача испорчена (антивирус, перенос программы, сменился путь) — пересоздаём
-		// один раз (запрос прав администратора) и пробуем снова
-		log.Println("задача запрета не запустилась:", strings.TrimSpace(decodeOEM(out)), "— пересоздаю")
-		if zapretRecreateTask() == nil {
-			out, err = hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
+	var out []byte
+	var err error
+	if !agentAlive() {
+		out, err = hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
+		if err != nil {
+			os.WriteFile(taskBrokenPath(), nil, 0644) // в следующий раз попросим права сразу при запуске
+		} else {
+			os.Remove(taskBrokenPath())
 		}
 	}
 	if err != nil {
-		// задача так и не запустилась — выполняем команду напрямую с правами администратора
-		// (Windows спросит разрешение), чтобы запрет всё равно включился
+		log.Println("задача запрета не запустилась:", strings.TrimSpace(decodeOEM(out)), "— запускаю помощника с правами администратора")
+		if startAgent() {
+			// помощник запущен (один запрос UAC на весь сеанс) — он и выполнит команду
+			err = nil
+		} else if agentRefusedNow() {
+			return zState{}, errors.New("нужно разрешение администратора: Windows спрашивает его один раз при запуске NETtool")
+		}
+	}
+	if err != nil {
+		// помощник не ответил — выполняем эту команду напрямую с правами администратора
 		exe, _ := os.Executable()
 		ps := fmt.Sprintf(`Start-Process -FilePath '%s' -ArgumentList '--zapret-task' -Verb RunAs -WindowStyle Hidden`, strings.ReplaceAll(exe, "'", "''"))
 		if hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run() == nil {
-			log.Println("команда запрета выполнена напрямую (задача не работает)")
+			log.Println("команда запрета выполнена напрямую")
 			err = nil
 		}
 	}
@@ -249,6 +244,11 @@ func zapretTaskMain() {
 	if err != nil || json.Unmarshal(b, &c) != nil {
 		return
 	}
+	zapretHandle(c)
+}
+
+// zapretHandle выполняет одну команду (в процессе с правами администратора).
+func zapretHandle(c zCmd) {
 	if c.Bypass != nil {
 		bypassList = c.Bypass
 	}
@@ -266,6 +266,14 @@ func zapretTaskMain() {
 		killWinws()
 	case "start":
 		warpExcludeMode = c.Warp && c.WarpExclude
+		if !zapretInstalled() { // запрета ещё нет (или его удалил антивирус) — скачиваем
+			if v, err := zapretDownloadInstall(); err != nil {
+				runErr = err
+				break
+			} else {
+				st.Version = v
+			}
+		}
 		runErr = startWinws(c.Strategy, c.Warp)
 	case "test":
 		runErr = zapretAutoTest(&st, c.Warp)
@@ -914,7 +922,9 @@ func repairShortcut(ico string) bool {
 	lnk := filepath.Join(progs, "NETtool.lnk")
 	exe, _ := os.Executable()
 	if _, err := os.Stat(lnk); err == nil && lnkTargetOK(lnk, exe) {
-		lnkSetAUMID(lnk)
+		if lnkSetAUMID(lnk) {
+			shellRefresh()
+		}
 		return false
 	}
 	ps := `$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut(` + psQuote(lnk) + `); $s.TargetPath=` + psQuote(exe) +

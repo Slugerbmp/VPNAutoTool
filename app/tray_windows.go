@@ -423,7 +423,7 @@ var (
 	fmtAppUserModel  = winGUID{0x9F4C2855, 0x9F79, 0x4B39, [8]byte{0xA8, 0xD0, 0xE1, 0xD4, 0x2D, 0xE1, 0xD5, 0xF3}}
 )
 
-const appUserModelID = "VPNAuto.App"
+const appUserModelID = "undr.NETtool" // новый ID: старый Windows запомнила с пустым значком
 
 func findUIWindow() uintptr { return findWindowTitle("NETtool") }
 
