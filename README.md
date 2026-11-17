@@ -18,6 +18,16 @@ Windows 10/11 и macOS 11+ (Intel и Apple Silicon). Автор — **undr**.
 </p>
 <p align="center"><sub>Слева направо: VPN с автовыбором · запрет + WARP · светлая тема · приставки (DNS и режим шлюза) · настройки и автообновление · мини-окно у трея. Названия серверов — демонстрационные.</sub></p>
 
+## ⬇️ Скачать
+
+| | |
+|---|---|
+| **Windows 10/11** | **[VPN-Auto-Setup.exe](https://github.com/Slugerbmp/VPNAutoTool/releases/latest/download/VPN-Auto-Setup.exe)** — скачать и запустить |
+| **macOS 11+** | **[VPN-Auto-macOS.zip](https://github.com/Slugerbmp/VPNAutoTool/releases/latest/download/VPN-Auto-macOS.zip)** |
+| Все файлы | [страница выпусков](https://github.com/Slugerbmp/VPNAutoTool/releases/latest) |
+
+> Кнопка «Code → Download ZIP» скачивает **исходный код**, а не программу. Для установки нужен файл выше.
+
 ---
 
 ## Содержание
@@ -42,7 +52,7 @@ Windows 10/11 и macOS 11+ (Intel и Apple Silicon). Автор — **undr**.
 
 ## Установка
 
-Скачайте последний выпуск на странице **[Releases](../../releases/latest)**.
+Скачайте установщик по ссылке в разделе [«Скачать»](#️-скачать) или со страницы **[Releases](../../releases/latest)** (справа на главной странице репозитория).
 
 ### Windows
 1. Запустите `VPN-Auto-Setup.exe`. Если появится «Windows защитила ваш компьютер» — «Подробнее» → «Выполнить в любом случае» (программа не подписана платным сертификатом).
