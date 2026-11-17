@@ -158,7 +158,7 @@ Windows 10/11 и macOS 11+ (Intel и Apple Silicon). Автор — **undr**.
 
 Результат в `dist/`: `VPN-Auto-Setup.exe`, `VPN-Auto-macOS.zip`, архив для раздачи и `SHA256SUMS.txt`. Скрипт сам скачает вшиваемые компоненты (запрет, TG WS Proxy) и прогонит тесты (`go test ./app`).
 
-Выпуск новой версии: поднять `appVersion` в `app/main.go` и `version` в `setup/main.go`, добавить описание в `docs/release-notes/vX.Y.Z.md` и отправить тег `vX.Y.Z` — GitHub Actions сам соберёт программу и опубликует Release со всеми файлами. Программы у пользователей обновятся сами.
+Выпуск новой версии: поднять `appVersion` в `app/main.go` и `version` в `setup/main.go`, добавить описание в `docs/release-notes/vX.Y.Z.md` и отправить изменения в `main` — GitHub Actions увидит новую версию, сам соберёт программу и опубликует Release со всеми файлами. Программы у пользователей обновятся сами.
 
 ---
 
