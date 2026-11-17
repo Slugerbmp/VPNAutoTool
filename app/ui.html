@@ -598,7 +598,15 @@ function render(){
         const fig = (text, cap) => { const f = el('figure'); const im = el('img'); im.src = '/api/qr?text=' + encodeURIComponent(text); f.append(im, cap); q.append(f); };
         if (!h.lan && h.ssid) fig(`WIFI:T:WPA;S:${h.ssid.replace(/([\\;,:"])/g,'\\$1')};P:${(h.pass||'').replace(/([\\;,:"])/g,'\\$1')};;`, 'Подключиться к сети');
         fig(`http://${h.proxy}/proxy.pac`, 'Адрес автонастройки');
+        // Telegram на телефоне не использует системный прокси — свой прокси по ссылке
+        if (h.tg || h.tgSocks) fig(h.tg || h.tgSocks, 'Telegram: наведите камеру телефона');
         box.append(q);
+        if (h.tg || h.tgSocks) {
+          box.append(el('div', 'mut', 'Telegram на телефоне не идёт через прокси Wi-Fi. Отсканируйте QR «Telegram» камерой телефона — откроется Telegram и предложит подключить прокси этого компьютера' +
+            (h.tg ? ' (через TG WS Proxy, как на ПК).' : ' (SOCKS5; если не грузится — включите TG WS Proxy в NETtool).')));
+          const t = el('div', 'mut'); t.append('Или вручную: Telegram → Настройки → Данные и память → Прокси → ');
+          t.append(el('b', '', h.tg ? 'MTProto, сервер ' + ip + ', порт 10831' : 'SOCKS5, сервер ' + ip + ', порт ' + port)); box.append(t);
+        }
       }
       const gw = h.gw || {};
       if (gw.on) {

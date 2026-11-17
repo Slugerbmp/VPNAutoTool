@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.12.7"
+	appVersion = "1.12.8"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"

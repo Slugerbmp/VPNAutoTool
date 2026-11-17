@@ -295,7 +295,7 @@ func zapretHandle(c zCmd) {
 		// порты для приставок (DNS, HTTP, HTTPS) и прокси раздачи — отдельными правилами
 		hiddenCmd("netsh", "advfirewall", "firewall", "delete", "rule", "name=VPN Auto consoles").Run()
 		for _, pr := range []string{"tcp", "udp"} {
-			ports := "53,80,443,10830"
+			ports := "53,80,443,10830,10831"
 			if pr == "udp" {
 				ports = "53"
 			}

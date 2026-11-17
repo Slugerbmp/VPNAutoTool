@@ -143,7 +143,16 @@ func tgwsStop() {
 
 // Ссылка для Telegram Desktop по настройкам TG WS Proxy (%APPDATA%\TgWsProxy\config.json).
 func tgwsLink() string {
-	host, port, secret := "127.0.0.1", "1443", ""
+	host, port, secret := tgwsConf()
+	if secret == "" {
+		return fmt.Sprintf("tg://socks?server=%s&port=%s", host, port)
+	}
+	return fmt.Sprintf("tg://proxy?server=%s&port=%s&secret=%s", host, port, secret)
+}
+
+// tgwsConf — адрес и секрет TG WS Proxy (secret пустой у старых версий с SOCKS5).
+func tgwsConf() (host, port, secret string) {
+	host, port, secret = "127.0.0.1", "1443", ""
 	b, err := os.ReadFile(filepath.Join(os.Getenv("APPDATA"), "TgWsProxy", "config.json"))
 	if err == nil {
 		var cfg map[string]any
@@ -167,14 +176,10 @@ func tgwsLink() string {
 			secret = str("secret")
 		}
 	}
-	if secret == "" {
-		// старые версии — SOCKS5 без секрета
-		if port == "1443" {
-			port = "1080"
-		}
-		return fmt.Sprintf("tg://socks?server=%s&port=%s", host, port)
+	if secret == "" && port == "1443" { // старые версии — SOCKS5 без секрета
+		port = "1080"
 	}
-	return fmt.Sprintf("tg://proxy?server=%s&port=%s&secret=%s", host, port, secret)
+	return
 }
 
 func tgwsLatestTag() (string, error) {

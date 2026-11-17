@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -186,6 +187,20 @@ func hotspotProxyStart(lan bool) error {
 		return fmt.Errorf("не удалось открыть порт для раздачи: %v", err)
 	}
 	hsListener, hsIP = ln, ip
+	// Telegram на телефоне не пользуется системным прокси — для него отдельный вход:
+	// пересылка к TG WS Proxy этого компьютера (MTProto-прокси с секретом)
+	if tl, err := net.Listen("tcp", fmt.Sprintf("%s:%d", ip, hotspotTGPort)); err == nil {
+		hsTGListener = tl
+		go func() {
+			for {
+				c, err := tl.Accept()
+				if err != nil {
+					return
+				}
+				go serveTGRelay(c)
+			}
+		}()
+	}
 	go func() {
 		for {
 			c, err := ln.Accept()
@@ -205,6 +220,43 @@ func hotspotProxyStop() {
 		hsListener.Close()
 		hsListener, hsIP = nil, ""
 	}
+	if hsTGListener != nil {
+		hsTGListener.Close()
+		hsTGListener = nil
+	}
+}
+
+const hotspotTGPort = 10831
+
+var hsTGListener net.Listener
+
+func serveTGRelay(c net.Conn) {
+	defer c.Close()
+	_, port, secret := tgwsConf()
+	if secret == "" || !tgwsRunning() {
+		return
+	}
+	up, err := net.DialTimeout("tcp", "127.0.0.1:"+port, 5*time.Second)
+	if err != nil {
+		return
+	}
+	defer up.Close()
+	pipe(c, up)
+}
+
+// tgShareLinks — ссылки для Telegram на телефоне: через TG WS Proxy (если запущен) и SOCKS5.
+func tgShareLinks() (mtproto, socks string) {
+	hsMu.Lock()
+	ip, tgOK := hsIP, hsTGListener != nil
+	hsMu.Unlock()
+	if ip == "" {
+		return "", ""
+	}
+	socks = fmt.Sprintf("tg://socks?server=%s&port=%d", ip, hotspotProxyPort)
+	if _, _, secret := tgwsConf(); tgOK && secret != "" && tgwsRunning() {
+		mtproto = fmt.Sprintf("tg://proxy?server=%s&port=%d&secret=%s", ip, hotspotTGPort, secret)
+	}
+	return
 }
 
 func hotspotProxyAddr() string {
@@ -234,8 +286,16 @@ func (a *App) serveHotspotConn(c net.Conn) {
 	a.mu.Lock()
 	vpn, idx := a.on, a.cur
 	a.mu.Unlock()
+	port := basePort + idx
+	if head[0] == 0x05 { // SOCKS5 — так подключается Telegram (ссылка tg://socks)
+		if !(vpn && idx >= 0 && coreRunning()) {
+			socksDirect(c, br)
+			return
+		}
+		port = socksBase + idx // SOCKS5-вход ядра выбранного сервера
+	}
 	if vpn && idx >= 0 && coreRunning() {
-		up, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", basePort+idx), 3*time.Second)
+		up, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), 3*time.Second)
 		if err != nil {
 			return
 		}
@@ -316,4 +376,69 @@ func directProxy(c net.Conn, br *bufio.Reader) {
 			return
 		}
 	}
+}
+
+// socksDirect — простой SOCKS5 (без пароля, только CONNECT): соединение исходит от компьютера,
+// значит на него действуют запрет и WARP.
+func socksDirect(c net.Conn, br *bufio.Reader) {
+	c.SetDeadline(time.Now().Add(20 * time.Second))
+	hdr := make([]byte, 2)
+	if _, err := io.ReadFull(br, hdr); err != nil || hdr[0] != 5 {
+		return
+	}
+	if _, err := io.ReadFull(br, make([]byte, int(hdr[1]))); err != nil {
+		return
+	}
+	c.Write([]byte{5, 0})
+	req := make([]byte, 4)
+	if _, err := io.ReadFull(br, req); err != nil || req[1] != 1 { // только CONNECT
+		c.Write([]byte{5, 7, 0, 1, 0, 0, 0, 0, 0, 0})
+		return
+	}
+	var host string
+	switch req[3] {
+	case 1:
+		b := make([]byte, 4)
+		if _, err := io.ReadFull(br, b); err != nil {
+			return
+		}
+		host = net.IP(b).String()
+	case 3:
+		l := make([]byte, 1)
+		if _, err := io.ReadFull(br, l); err != nil {
+			return
+		}
+		b := make([]byte, int(l[0]))
+		if _, err := io.ReadFull(br, b); err != nil {
+			return
+		}
+		host = string(b)
+	case 4:
+		b := make([]byte, 16)
+		if _, err := io.ReadFull(br, b); err != nil {
+			return
+		}
+		host = net.IP(b).String()
+	default:
+		return
+	}
+	pb := make([]byte, 2)
+	if _, err := io.ReadFull(br, pb); err != nil {
+		return
+	}
+	target := net.JoinHostPort(host, strconv.Itoa(int(pb[0])<<8|int(pb[1])))
+	up, err := net.DialTimeout("tcp", target, 15*time.Second)
+	if err != nil {
+		c.Write([]byte{5, 5, 0, 1, 0, 0, 0, 0, 0, 0})
+		return
+	}
+	defer up.Close()
+	c.Write([]byte{5, 0, 0, 1, 0, 0, 0, 0, 0, 0})
+	c.SetDeadline(time.Time{})
+	if n := br.Buffered(); n > 0 {
+		b, _ := br.Peek(n)
+		up.Write(b)
+		br.Discard(n)
+	}
+	pipe(c, up)
 }

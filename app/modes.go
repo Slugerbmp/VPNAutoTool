@@ -724,11 +724,12 @@ func (a *App) hotspotView() map[string]any {
 	}
 	gwv := a.gatewayView() // до блокировки zi.mu: внутри она берётся снова (иначе взаимная блокировка)
 	pxy := hotspotProxyAddr()
+	tgMT, tgSocks := tgShareLinks()
 	zi.mu.Lock()
 	defer zi.mu.Unlock()
 	return map[string]any{"supported": true, "on": zi.hsOn, "busy": zi.hsBusy, "error": zi.hsErr,
 		"lan": zi.hsLAN, "note": zi.hsNote, "preferLan": preferLAN,
-		"ssid": zi.hsInfo.Ssid, "pass": zi.hsInfo.Pass, "clients": zi.hsInfo.Clients, "proxy": pxy,
+		"ssid": zi.hsInfo.Ssid, "pass": zi.hsInfo.Pass, "clients": zi.hsInfo.Clients, "proxy": pxy, "tg": tgMT, "tgSocks": tgSocks,
 		"console": consOn, "dns": cip, "dnsErr": cerr, "dnsQ": cq, "dns2": routerGuess(cip), "geo": gv, "gw": gwv}
 }
 

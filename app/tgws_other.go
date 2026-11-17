@@ -17,3 +17,5 @@ func tgwsStop()                      {}
 func tgwsLink() string               { return "" }
 func tgwsLatestTag() (string, error) { return "", errNoTgws }
 func tgwsDir() string                { return "" }
+
+func tgwsConf() (string, string, string) { return "", "", "" }

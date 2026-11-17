@@ -29,3 +29,5 @@ func warpLatest() (string, string, error) {
 
 func hotspotIP() string { return "" }
 func lanIP() string     { return "" }
+
+func tgShareLinks() (string, string) { return "", "" }
