@@ -52,4 +52,5 @@ func warpDisconnect()                               {}
 
 func warpExclude() {}
 
-func warpGUIStart() {}
+func warpGUIStart()                          {}
+func zapretDownloadInstall() (string, error) { return "", errNoZapret }

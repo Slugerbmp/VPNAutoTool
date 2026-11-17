@@ -588,9 +588,5 @@ func closeUIWindows() {
 	hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run()
 }
 
-func relaunchIcon(exe string) string {
-	if m, _ := filepath.Glob(filepath.Join(filepath.Dir(exe), "icon-*.ico")); len(m) > 0 {
-		return m[len(m)-1] + ",0"
-	}
-	return exe + ",0"
-}
+// Значок окна на панели задач — из самого exe (ресурс №1): путь не меняется при обновлениях.
+func relaunchIcon(exe string) string { return exe + ",-1" }

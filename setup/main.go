@@ -29,13 +29,7 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-//go:embed zapret.zip
-var zapretZip []byte
-
-//go:embed TgWsProxy.exe
-var tgwsExe []byte
-
-const version = "1.10.0"
+const version = "1.11.0"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
@@ -165,7 +159,9 @@ func main() {
 		dir = filepath.Join(dir, "VPN Auto") // своя отдельная папка — чтобы удаление ничего лишнего не задело
 	}
 	exe := filepath.Join(dir, "VPNAuto.exe")
-	ico := filepath.Join(dir, "icon-"+strings.ReplaceAll(version, ".", "")+".ico") // новое имя — мимо кэша значков Windows
+	// значок берём прямо из VPNAuto.exe: путь не меняется между версиями, поэтому ярлыки
+	// и закрепления в «Пуске» и на панели задач не теряют значок после обновления
+	ico := exe
 
 	// закрываем запущенную программу, чтобы заменить файл
 	dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
@@ -201,12 +197,9 @@ func main() {
 	}
 	if olds, _ := filepath.Glob(filepath.Join(dir, "icon*.ico")); len(olds) > 0 {
 		for _, o := range olds {
-			if o != ico {
-				os.Remove(o)
-			}
+			os.Remove(o)
 		}
 	}
-	os.WriteFile(ico, appIcon, 0644)
 
 	// старая копия в другой папке больше не нужна
 	if updating && !strings.EqualFold(filepath.Clean(old), filepath.Clean(dir)) {
@@ -222,8 +215,12 @@ func main() {
 	ps := fmt.Sprintf(`$w=New-Object -ComObject WScript.Shell;`+
 		`function mk($p){$s=$w.CreateShortcut($p);$s.TargetPath=%s;$s.WorkingDirectory=%s;$s.IconLocation=%s;`+
 		`$s.Description='VPN Auto by undr — автоматический выбор быстрого сервера';$s.Save()};`+
-		`mk (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk');`+deskPS,
-		psq(exe), psq(dir), psq(ico+",0"))
+		`mk (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk');`+deskPS+
+		// закреплённые ярлыки (панель задач, «Пуск»), созданные пользователем, — тоже на значок из exe
+		`$pin=Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned';`+
+		`Get-ChildItem -LiteralPath $pin -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object {`+
+		`$s=$w.CreateShortcut($_.FullName); if($s.TargetPath -ieq `+psq(exe)+`){$s.IconLocation=`+psq(exe+",0")+`;$s.Save()}};`,
+		psq(exe), psq(dir), psq(exe+",0"))
 	runPS(ps)
 
 	for _, kv := range [][3]string{
@@ -243,9 +240,8 @@ func main() {
 
 	if wantZap {
 		// распаковка запрета и задача для запуска без UAC — один запрос прав администратора
-		zf := filepath.Join(tmp, "zapret.zip")
-		os.WriteFile(zf, zapretZip, 0644)
-		ps := fmt.Sprintf(`Start-Process -FilePath %s -ArgumentList '--zapret-setup',%s -Verb RunAs -Wait`, psq(exe), psq(`"`+zf+`"`))
+		// сам запрет программа скачает с GitHub автора (в установщик не вшиваем — антивирусы ругаются на WinDivert)
+		ps := fmt.Sprintf(`Start-Process -FilePath %s -ArgumentList '--zapret-setup' -Verb RunAs -Wait`, psq(exe))
 		if _, err := runPS(ps); err != nil || !fileExists(filepath.Join(dir, "zapret", "bin", "winws.exe")) {
 			msgBox("Запрет не установлен: не было разрешения администратора.\nЕго можно будет установить позже прямо из программы (режим «Запрет»).", 0x30)
 		}
@@ -259,14 +255,7 @@ func main() {
 	}
 
 	if wantTg {
-		// вшитый TG WS Proxy; программа включит его при старте и будет обновлять
-		td := filepath.Join(dir, "tgwsproxy")
-		os.MkdirAll(td, 0755)
-		if !fileExists(filepath.Join(td, "TgWsProxy.exe")) {
-			if os.WriteFile(filepath.Join(td, "TgWsProxy.exe"), tgwsExe, 0755) == nil {
-				os.WriteFile(filepath.Join(td, "version.txt"), []byte("embedded"), 0644)
-			}
-		}
+		// TG WS Proxy программа скачает при старте, включит и будет обновлять
 		dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
 		os.MkdirAll(dd, 0755)
 		os.WriteFile(filepath.Join(dd, "pending-tgws-install"), []byte("1"), 0644)

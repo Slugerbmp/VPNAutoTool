@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>VPN Auto</title>
-<link rel="icon" type="image/png" href="/favicon.png?v=1100">
+<link rel="icon" type="image/png" href="/favicon.png?v=1110">
 <meta name="theme-color" id="themeColor" content="#0a0a0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -156,7 +156,7 @@
   <div id="tb"><div class="d" id="tbD">VPN Auto</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
   <div id="grip"></div>
   <header>
-    <img src="/favicon.png?v=1100" alt="">
+    <img src="/favicon.png?v=1110" alt="">
     <span class="t">VPN Auto</span>
     <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
   </header>
@@ -398,7 +398,7 @@ function renderServers(){
   const rank = i => { const s = S[i], stab = s.stab >= 0 ? s.stab : 100; return (s.ping || 1e9) * (1 + (100 - stab) / 100 * 3) + (100 - stab) * 6; };
   const main = idx.filter(i => S[i].kind !== 'info');
   const alive = main.filter(i => S[i].ping >= 0).sort((a, b) =>
-    (S[a].kind === 'special') - (S[b].kind === 'special') ||
+    (S[a].kind === 'special' || S[a].kind === 'cis') - (S[b].kind === 'special' || S[b].kind === 'cis') ||
     (bySpeed ? ((SP[S[b].name] || 0) - (SP[S[a].name] || 0)) : (rank(a) - rank(b))));
   const dead = main.filter(i => S[i].ping < 0);
   const info = idx.filter(i => S[i].kind === 'info');
@@ -416,6 +416,7 @@ function renderServers(){
     if (s.ping >= 0 && !n.querySelector('.cc')) n.prepend(el('span', 'cc', '—'));
     r.append(n);
     if (s.kind === 'special') { const tg = el('span', 'tag', 'только вручную'); tg.title = 'Специальный сервер (например, для торрентов) — автовыбор его не использует'; r.append(tg); }
+    if (s.kind === 'cis') { const tg = el('span', 'tag', 'СНГ · вручную'); tg.title = 'Сервер в СНГ (например, Беларусь): от российских блокировок не помогает, поэтому автовыбор его не использует'; r.append(tg); }
     if (st.pinned === s.name) r.append(el('span', 'pin', 'выбран'));
     if (s.ping >= 0 && s.stab >= 0 && s.kind !== 'info') { const sb = el('span', 'stab' + (s.stab < 90 ? ' low' : ''), s.stab + '%'); sb.title = 'Стабильность: доля успешных проверок за последние ~5 минут'; r.append(sb); }
     const sp = (st.speeds || {})[s.name];

@@ -72,11 +72,9 @@ func (a *App) geoLoop() {
 	geo.Unlock()
 	defer func() { geo.Lock(); geo.running = false; geo.Unlock() }()
 	for {
-		cons.Lock()
-		on := cons.on
-		cons.Unlock()
-		if !on && !gwActive.Load() {
-			return
+		if !coreRunning() && !gwActive.Load() {
+			time.Sleep(20 * time.Second)
+			continue
 		}
 		a.geoCheckOnce()
 		time.Sleep(20 * time.Second)
@@ -104,6 +102,17 @@ func (a *App) geoCheckOnce() {
 	}
 	// серверы VPN: отвечающие, ещё не проверенные (или давно) — по 6 за раз
 	a.mu.Lock()
+	for _, s := range a.servers { // после обновления подписки — сразу по уже известным странам
+		geo.Lock()
+		c, has := geo.byServer[s.Name]
+		geo.Unlock()
+		if has && isCIS(c) && s.Kind == "" {
+			s.Kind = "cis"
+		}
+	}
+	if a.cur >= 0 && a.cur < len(a.servers) && a.servers[a.cur].Kind == "cis" && a.settings.Pinned != a.servers[a.cur].Name {
+		a.choose()
+	}
 	type cand struct {
 		i    int
 		name string
@@ -146,6 +155,16 @@ func (a *App) geoCheckOnce() {
 				geo.byServer[c.name] = loc
 			}
 			geo.Unlock()
+			if err == nil && isCIS(loc) { // фактический выход в СНГ — убираем из автовыбора
+				a.mu.Lock()
+				if c.i < len(a.servers) && a.servers[c.i].Name == c.name && a.servers[c.i].Kind == "" {
+					a.servers[c.i].Kind = "cis"
+					if a.cur == c.i && a.settings.Pinned != c.name {
+						a.choose()
+					}
+				}
+				a.mu.Unlock()
+			}
 		}(c)
 	}
 	wg.Wait()
@@ -189,7 +208,7 @@ func (a *App) geoRoutes() []geoRoute {
 			c, has := geo.byServer[s.Name]
 			geo.Unlock()
 			switch {
-			case has && c != "RU" && c != "BY":
+			case has && !isCIS(c):
 				known = append(known, sv{i, s.Name, s.Ping})
 			case !has && !looksRussian(s.Name):
 				unknown = append(unknown, sv{i, s.Name, s.Ping})
@@ -212,7 +231,7 @@ func (a *App) geoRoutes() []geoRoute {
 	geo.Lock()
 	d, w := geo.direct, geo.warp
 	geo.Unlock()
-	if d != "" && d != "RU" && d != "BY" {
+	if d != "" && !isCIS(d) {
 		name := "напрямую"
 		if w {
 			name = "WARP"
@@ -277,4 +296,20 @@ func (a *App) geoView() map[string]any {
 		v["ok"] = false
 	}
 	return v
+}
+
+// Страны СНГ: VPN-сервер там не помогает обойти российские блокировки.
+var cisCountries = map[string]bool{"RU": true, "BY": true, "KZ": true, "KG": true, "AM": true, "AZ": true, "TJ": true, "UZ": true, "MD": true, "TM": true}
+
+func isCIS(cc string) bool { return cisCountries[strings.ToUpper(cc)] }
+
+// Страна по флагу-эмодзи в названии сервера (🇧🇾 → BY).
+func flagCountry(name string) string {
+	r := []rune(name)
+	for i := 0; i+1 < len(r); i++ {
+		if r[i] >= 0x1F1E6 && r[i] <= 0x1F1FF && r[i+1] >= 0x1F1E6 && r[i+1] <= 0x1F1FF {
+			return string([]rune{'A' + (r[i] - 0x1F1E6), 'A' + (r[i+1] - 0x1F1E6)})
+		}
+	}
+	return ""
 }

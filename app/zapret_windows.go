@@ -600,6 +600,20 @@ func warpStatus() string {
 func warpConnect() error {
 	defer warpStage.Store("")
 	warpExclude()
+	// служба WARP могла быть остановлена/отключена (после обновления Windows, «оптимизаторов»
+	// или ручного выхода из клиента) — тогда warp-cli не отвечает и подключение не идёт
+	warpStage.Store("запуск службы")
+	if out, _ := hiddenCmd("sc", "query", "CloudflareWARP").CombinedOutput(); !strings.Contains(string(out), "RUNNING") {
+		hiddenCmd("sc", "config", "CloudflareWARP", "start=", "auto").Run()
+		hiddenCmd("sc", "start", "CloudflareWARP").Run()
+		for i := 0; i < 15; i++ {
+			if _, err := warpExec("status"); err == nil {
+				break
+			}
+			time.Sleep(time.Second)
+		}
+		log.Println("служба WARP запущена")
+	}
 	warpStage.Store("регистрация")
 	if out, err := warpExec("registration", "show"); err != nil || strings.Contains(strings.ToLower(out), "missing") || strings.Contains(strings.ToLower(out), "error") {
 		if out, err := warpExec("registration", "new"); err != nil {

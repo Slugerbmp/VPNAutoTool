@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Сборка VPN Auto: Windows (программа + установщик), macOS (универсальный .app),
 # архив для раздачи и SHA256SUMS.txt для автообновления.
-# Нужно: Go 1.24+, python3, zip, curl. Работает на Linux/macOS/WSL.
+# Нужно: Go 1.24+, python3, zip. Работает на Linux/macOS/WSL.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -15,21 +15,15 @@ rm -rf dist build/mac build/bundle
 mkdir -p dist build/mac build/bundle/Windows build/bundle/macOS
 
 # значки в ресурсах exe
-python3 assets/mksyso.py app/rsrc_windows_amd64.syso assets/icon.ico assets/icon_off.ico >/dev/null
-python3 assets/mksyso.py setup/rsrc_windows_amd64.syso assets/icon.ico >/dev/null
+# значки + сведения о файле (версия, автор undr) + манифест — меньше ложных срабатываний антивирусов
+python3 assets/mksyso.py app/rsrc_windows_amd64.syso assets/icon.ico assets/icon_off.ico \
+  --ver "$VERSION" --file VPNAuto.exe --desc "VPN Auto — автовыбор VPN-сервера, запрет и WARP" >/dev/null
+python3 assets/mksyso.py setup/rsrc_windows_amd64.syso assets/icon.ico \
+  --ver "$VERSION" --file VPN-Auto-Setup.exe --desc "Установщик VPN Auto" >/dev/null
 cp assets/icon.ico setup/icon.ico
 
-# сторонние компоненты, вшиваемые в установщик (в репозиторий не кладём)
-if [ ! -s setup/zapret.zip ]; then
-  tag=$(curl -fsSL https://api.github.com/repos/Flowseal/zapret-discord-youtube/releases/latest | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)
-  echo "-- запрет $tag"
-  curl -fL -o setup/zapret.zip "https://github.com/Flowseal/zapret-discord-youtube/releases/download/$tag/zapret-discord-youtube-$tag.zip"
-fi
-if [ ! -s setup/TgWsProxy.exe ]; then
-  url=$(curl -fsSL https://api.github.com/repos/Flowseal/tg-ws-proxy/releases/latest | grep -o '"browser_download_url": *"[^"]*\.exe"' | head -1 | sed 's/.*"\(http[^"]*\)"/\1/')
-  echo "-- TG WS Proxy: $url"
-  curl -fL -o setup/TgWsProxy.exe "$url"
-fi
+# запрет и TG WS Proxy в установщик не вшиваются: программа скачивает их с GitHub авторов
+# (вшитые WinDivert и PyInstaller-сборка давали ложные срабатывания антивирусов)
 
 go test ./app
 

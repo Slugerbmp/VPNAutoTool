@@ -1,9 +1,25 @@
-"""Собирает rsrc_windows_amd64.syso с иконкой из .ico (аналог утилиты rsrc)."""
+"""Собирает rsrc_windows_amd64.syso: значки из .ico, сведения о файле (VERSIONINFO)
+и манифест (asInvoker). Сведения о версии и манифест заметно снижают число ложных
+срабатываний антивирусов на неподписанные программы.
+
+  mksyso.py out.syso a.ico [b.ico ...] [--ver 1.2.3] [--file VPNAuto.exe] [--desc "..."]
+"""
 import struct, sys
 
-out_path = sys.argv[1]
+args = sys.argv[1:]
+opts = {}
+pos = []
+i = 0
+while i < len(args):
+    if args[i].startswith('--'):
+        opts[args[i][2:]] = args[i + 1]
+        i += 2
+    else:
+        pos.append(args[i])
+        i += 1
+out_path = pos[0]
 icons, groups = [], []
-for gi, ico_path in enumerate(sys.argv[2:]):
+for gi, ico_path in enumerate(pos[1:]):
     ico = open(ico_path, 'rb').read()
     _, typ, count = struct.unpack_from('<HHH', ico, 0)
     grp = struct.pack('<HHH', 0, 1, count)
@@ -14,6 +30,55 @@ for gi, ico_path in enumerate(sys.argv[2:]):
     groups.append((gi + 1, grp))
 # (type, [(id, data)])
 types = [(3, [(i + 1, d) for i, d in enumerate(icons)]), (14, groups)]
+
+
+def pad4(b):
+    return b + b'\0' * ((4 - len(b) % 4) % 4)
+
+
+def block(key, value=b'', vtype=1, value_len=None, children=b''):
+    k = (key + '\0').encode('utf-16-le')
+    head_len = 6 + len(k)
+    body = pad4(b'\0' * head_len)[head_len:]  # выравнивание после ключа
+    data = value
+    if data:
+        data = pad4(data)
+    raw = k + body + data + children
+    vl = value_len if value_len is not None else (len(value) // 2 if vtype == 1 else len(value))
+    return struct.pack('<HHH', 6 + len(raw), vl, vtype) + raw
+
+
+if 'ver' in opts:
+    v = [int(x) for x in (opts['ver'].split('.') + ['0', '0', '0'])[:4]]
+    ms, ls = (v[0] << 16) | v[1], (v[2] << 16) | v[3]
+    fixed = struct.pack('<13I', 0xFEEF04BD, 0x00010000, ms, ls, ms, ls, 0x3F, 0, 0x00040004, 1, 0, 0, 0)
+    name = opts.get('name', 'VPN Auto')
+    strings = [('CompanyName', 'undr'), ('FileDescription', opts.get('desc', name)), ('FileVersion', opts['ver']),
+               ('InternalName', opts.get('file', 'VPNAuto.exe').rsplit('.', 1)[0]), ('LegalCopyright', '© undr'),
+               ('OriginalFilename', opts.get('file', 'VPNAuto.exe')), ('ProductName', name), ('ProductVersion', opts['ver'])]
+    table = b''
+    for k, val in strings:
+        sv = (val + '\0').encode('utf-16-le')
+        table += pad4(block(k, sv, 1, len(sv) // 2))
+    st = pad4(block('040904B0', b'', 1, 0, table))
+    sfi = pad4(block('StringFileInfo', b'', 1, 0, st))
+    var = pad4(block('Translation', struct.pack('<HH', 0x0409, 0x04B0), 0, 4))
+    vfi = pad4(block('VarFileInfo', b'', 1, 0, var))
+    vs = block('VS_VERSION_INFO', fixed, 0, len(fixed), sfi + vfi)
+    types.append((16, [(1, vs)]))
+    manifest = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <assemblyIdentity type="win32" name="undr.VPNAuto" version="%d.%d.%d.%d"/>
+  <description>%s</description>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges>
+    <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+  </requestedPrivileges></security></trustInfo>
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1"><application>
+    <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+  </application></compatibility>
+</assembly>
+''' % (v[0], v[1], v[2], v[3], name.encode())
+    types.append((24, [(1, manifest)]))
 
 def dirhdr(n):
     return struct.pack('<IIHHHH', 0, 0, 0, 0, 0, n)

@@ -1,9 +1,8 @@
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# Тема как в программе: чёрная или белая — по настройке Windows
-$light = $false
-try { $light = ((Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize' -ErrorAction Stop).AppsUseLightTheme -eq 1) } catch {}
+# Светлая тема — белое окно в стиле программы
+$light = $true
 function C($hex) { [System.Drawing.ColorTranslator]::FromHtml($hex) }
 if ($light) { $BG = C '#fafafa'; $FG = C '#0a0a0a'; $MUT = C '#6b6b6b'; $LINE = C '#e0e0e0'; $RAISE = C '#f0f0f0' }
 else        { $BG = C '#0a0a0a'; $FG = C '#f2f2f2'; $MUT = C '#8c8c8c'; $LINE = C '#262626'; $RAISE = C '#141414' }

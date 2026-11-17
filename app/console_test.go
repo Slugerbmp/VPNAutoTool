@@ -67,3 +67,9 @@ func TestGeo(t *testing.T) {
 		t.Fatal("geohost")
 	}
 }
+
+func TestCIS(t *testing.T) {
+	if flagCountry("🇧🇾 Минск") != "BY" || flagCountry("Лондон") != "" || !isCIS("by") || isCIS("DE") {
+		t.Fatal("cis")
+	}
+}

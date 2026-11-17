@@ -532,6 +532,8 @@ func classifyServers(list []*Server) {
 			s.Kind = "info"
 		case reSpecial.MatchString(s.Name):
 			s.Kind = "special"
+		case isCIS(flagCountry(s.Name)):
+			s.Kind = "cis" // сервер в СНГ: от блокировок не спасает — только вручную
 		}
 	}
 }

@@ -25,13 +25,61 @@ import (
 )
 
 const (
-	appVersion = "1.10.0"
+	appVersion = "1.11.0"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
-	basePort   = 47400
-	socksBase  = 47800 // SOCKS5-входы ядра (по серверу) для режима шлюза
 	probeURL   = "https://www.gstatic.com/generate_204"
 )
+
+// Локальные входы ядра: HTTP (basePort+i) и SOCKS5 (socksBase+i) на каждый сервер.
+// Windows может закрепить диапазон портов за Hyper-V/WSL — тогда ядро не сможет их занять
+// и «не принимает соединения». Поэтому диапазоны выбираются из свободных при запуске.
+var (
+	basePort  = 47400
+	socksBase = 47800
+)
+
+var portCandidates = [][2]int{{47400, 47800}, {38400, 38800}, {26400, 26800}, {19400, 19800}, {58400, 58800}, {12400, 12800}}
+
+func rangeFree(start, n int, udp bool) bool {
+	for p := start; p < start+n; p++ {
+		l, err := net.Listen("tcp4", fmt.Sprintf("127.0.0.1:%d", p))
+		if err != nil {
+			return false
+		}
+		l.Close()
+		if udp {
+			u, err := net.ListenPacket("udp4", fmt.Sprintf("127.0.0.1:%d", p))
+			if err != nil {
+				return false
+			}
+			u.Close()
+		}
+	}
+	return true
+}
+
+// Подобрать свободные диапазоны (вызывается, когда ядро не запущено). skip — диапазон, на котором ядро упало.
+func pickPorts(n int, skip int) {
+	if n < 1 {
+		n = 1
+	}
+	if n > 380 {
+		n = 380
+	}
+	for _, c := range portCandidates {
+		if c[0] == skip {
+			continue
+		}
+		if rangeFree(c[0], n, false) && rangeFree(c[1], n, true) {
+			if basePort != c[0] {
+				log.Printf("порты ядра: %d+ и %d+", c[0], c[1])
+			}
+			basePort, socksBase = c[0], c[1]
+			return
+		}
+	}
+}
 
 //go:embed ui.html
 var uiHTML []byte
@@ -132,11 +180,18 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--zapret-setup" {
-		if len(os.Args) > 2 { // из установщика: распаковать вшитый запрет
+		if len(os.Args) > 2 { // архив запрета передан явно
 			if data, err := os.ReadFile(os.Args[2]); err == nil {
 				if _, err := extractZapretZip(data, zapretDir()); err != nil {
 					msgBox("Не удалось распаковать запрет: "+err.Error(), 0x10)
 				}
+			}
+		} else if _, err := os.Stat(filepath.Join(zapretDir(), "bin", "winws.exe")); err != nil {
+			// установщик больше не вшивает запрет (антивирусы ругались на WinDivert внутри):
+			// скачиваем свежую версию с GitHub автора
+			if _, err := zapretDownloadInstall(); err != nil {
+				msgBox("Не удалось скачать запрет: "+err.Error()+"\nЕго можно будет установить позже прямо из программы (режим «Запрет»).", 0x30)
+				return
 			}
 		}
 		if err := zapretSetupTask(); err != nil {
@@ -185,6 +240,7 @@ func main() {
 	go app.hotspotInit()
 	go app.gatewayLoop()
 	go app.updater()
+	go app.geoLoop() // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
 	go app.tgwsLoop()
 	go warpGUIStart() // значок Cloudflare WARP в трее вместе с нашим
 	go app.notifier()
@@ -314,6 +370,9 @@ func (a *App) applyServers(servers []*Server) {
 		a.mu.Unlock()
 		return
 	}
+	if !coreRunning() {
+		pickPorts(len(servers), 0)
+	}
 	a.mu.Lock()
 	cfg := buildConfig(servers, a.settings.DirectRu)
 	same := bytes.Equal(cfg, a.cfg) && coreRunning()
@@ -328,6 +387,24 @@ func (a *App) applyServers(servers []*Server) {
 	skipped := []string{}
 	for {
 		err := startCore(cfg)
+		if err == nil && !coreListening() {
+			// ядро запустилось, но не заняло свои порты (диапазон закреплён Windows за Hyper-V/WSL
+			// или занят другой программой) — берём другой диапазон
+			old := basePort
+			time.Sleep(1500 * time.Millisecond)
+			if !coreListening() {
+				log.Println("ядро не открыло порты", old, "— пробую другой диапазон:", lastLines(readCoreLog(), 3))
+				stopCore()
+				pickPorts(len(servers), old)
+				if basePort != old {
+					a.mu.Lock()
+					cfg = buildConfig(servers, a.settings.DirectRu)
+					a.mu.Unlock()
+					continue
+				}
+				err = errors.New("ядро VPN не смогло открыть локальные порты: " + lastLines(readCoreLog(), 2))
+			}
+		}
 		if err == nil {
 			break
 		}
@@ -550,6 +627,33 @@ func startCore(cfg []byte) error {
 		}
 		coreMu.Unlock()
 		if crashed {
+			now := time.Now()
+			coreMu.Lock()
+			recent := coreCrashes[:0]
+			for _, t := range coreCrashes {
+				if now.Sub(t) < time.Minute {
+					recent = append(recent, t)
+				}
+			}
+			coreCrashes = append(recent, now)
+			n := len(coreCrashes)
+			coreMu.Unlock()
+			if _, err := os.Stat(coreExe()); err != nil {
+				msg := "Файл ядра VPN исчез — скорее всего, его удалил антивирус. Добавьте папку " + coreDir() + " в исключения антивируса и нажмите «Обновить подписку»"
+				log.Println(msg)
+				if app != nil {
+					app.setStatus("", msg)
+				}
+				return
+			}
+			if n >= 3 {
+				msg := "Ядро VPN постоянно падает: " + lastLines(readCoreLog(), 2) + ". Возможно, его блокирует антивирус"
+				log.Println(msg)
+				if app != nil {
+					app.setStatus("", msg)
+				}
+				return
+			}
 			log.Println("ядро завершилось само, перезапуск")
 			time.Sleep(3 * time.Second)
 			if !coreRunning() {
@@ -560,6 +664,26 @@ func startCore(cfg []byte) error {
 	time.Sleep(700 * time.Millisecond)
 	return nil
 }
+
+// Слушает ли ядро свой первый вход.
+func coreListening() bool {
+	if !coreRunning() {
+		return false
+	}
+	c, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", basePort), 700*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	c.Close()
+	return true
+}
+
+func readCoreLog() string {
+	b, _ := os.ReadFile(filepath.Join(dataDir, "core.log"))
+	return string(b)
+}
+
+var coreCrashes []time.Time
 
 func errorLines(s string) string {
 	var keep []string
