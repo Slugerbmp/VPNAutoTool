@@ -12,13 +12,14 @@ const zapretSupported = false
 const warpDownloadURL = "https://1.1.1.1/"
 
 type zCmd struct {
-	Action   string
-	Strategy string
-	Warp     bool
-	Bypass   []string
-	VPNIPs   []string
-	IfIdx    int
-	Extra    []string
+	Action      string
+	Strategy    string
+	Warp        bool
+	Bypass      []string
+	VPNIPs      []string
+	IfIdx       int
+	WarpExclude bool
+	Extra       []string
 }
 
 type zState struct {

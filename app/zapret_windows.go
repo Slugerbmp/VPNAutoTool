@@ -38,7 +38,10 @@ type zCmd struct {
 	Bypass   []string `json:"bypass"`
 	VPNIPs   []string `json:"vpnIps"`
 	IfIdx    int      `json:"ifIdx,omitempty"`
-	Extra    []string `json:"extra"`
+	// WarpExclude — запрет не трогает серверы WARP (запасной режим, если WARP видит подмену пакетов).
+	// По умолчанию — как в исходных .bat: с ним WARP подключается там, где без запрета не может.
+	WarpExclude bool     `json:"warpExclude,omitempty"`
+	Extra       []string `json:"extra"`
 }
 
 type zState struct {
@@ -134,6 +137,22 @@ func zapretSetupTask() error {
 }
 
 // Из обычной программы: один раз спросить UAC и создать задачу.
+var taskRecreated time.Time
+
+// Пересоздать задачу запуска запрета (не чаще раза в 10 минут — каждый раз спрашивает UAC).
+func zapretRecreateTask() error {
+	if time.Since(taskRecreated) < 10*time.Minute {
+		return errors.New("задачу уже пересоздавали")
+	}
+	taskRecreated = time.Now()
+	exe, _ := os.Executable()
+	ps := fmt.Sprintf(`Start-Process -FilePath '%s' -ArgumentList '--zapret-setup' -Verb RunAs -Wait`, strings.ReplaceAll(exe, "'", "''"))
+	if err := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run(); err != nil {
+		return errors.New("нужно разрешение администратора")
+	}
+	return nil
+}
+
 func zapretEnsureTask() error {
 	if zapretTaskExists() {
 		return nil
@@ -159,11 +178,23 @@ func zapretRun(c zCmd, wait time.Duration) (zState, error) {
 		return zState{}, err
 	}
 	c.Req = time.Now().UnixNano()
+	if c.Warp {
+		c.WarpExclude = appWarpExclude.Load()
+	}
 	c.Bypass = bypassList
 	c.VPNIPs = vpnServerIPs
 	c.Extra = zapretExtra
 	writeJSONFile(zCmdPath(), c)
-	if out, err := hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput(); err != nil {
+	out, err := hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
+	if err != nil {
+		// задача испорчена (антивирус, перенос программы, сменился путь) — пересоздаём
+		// один раз (запрос прав администратора) и пробуем снова
+		log.Println("задача запрета не запустилась:", strings.TrimSpace(decodeOEM(out)), "— пересоздаю")
+		if zapretRecreateTask() == nil {
+			out, err = hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
+		}
+	}
+	if err != nil {
 		msg := strings.TrimSpace(decodeOEM(out))
 		low := strings.ToLower(msg)
 		if strings.Contains(low, "отказано в доступе") || strings.Contains(low, "access is denied") {
@@ -214,6 +245,7 @@ func zapretTaskMain() {
 	case "stop":
 		killWinws()
 	case "start":
+		warpExcludeMode = c.Warp && c.WarpExclude
 		runErr = startWinws(c.Strategy, c.Warp)
 	case "test":
 		runErr = zapretAutoTest(&st, c.Warp)

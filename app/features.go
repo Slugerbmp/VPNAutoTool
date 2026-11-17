@@ -545,3 +545,60 @@ func (a *App) featureView() map[string]any { // под a.mu
 		},
 	}
 }
+
+// ---------- автоматический тест скорости при проблемах с подключением ----------
+// Если выбранный сервер не отвечает (или подключение не готово) дольше 15 секунд —
+// программа сама проверяет скорость отвечающих серверов и переключается на самый быстрый.
+func (a *App) connWatch() {
+	var badSince, lastRun time.Time
+	for {
+		time.Sleep(3 * time.Second)
+		a.mu.Lock()
+		on := a.on
+		bad := a.cur < 0 || a.cur >= len(a.servers) || a.servers[a.cur].Ping <= 0
+		alive := 0
+		for _, s := range a.servers {
+			if s.Ping > 0 && s.Kind == "" {
+				alive++
+			}
+		}
+		busy := a.speedBusy
+		a.mu.Unlock()
+		if !on || !coreRunning() || !bad {
+			badSince = time.Time{}
+			continue
+		}
+		if badSince.IsZero() {
+			badSince = time.Now()
+			continue
+		}
+		if time.Since(badSince) < 15*time.Second || busy || alive == 0 || time.Since(lastRun) < 5*time.Minute {
+			continue
+		}
+		lastRun = time.Now()
+		log.Println("сервер не отвечает дольше 15 секунд — запускаю тест скорости")
+		a.setEvent("сервер не отвечает — проверяю скорость остальных")
+		a.runSpeedTest()
+		a.mu.Lock()
+		best := -1
+		for i, s := range a.servers {
+			if s.Ping > 0 && s.Kind == "" && a.speed[s.Name] > 0 && (best < 0 || a.speed[s.Name] > a.speed[a.servers[best].Name]) {
+				best = i
+			}
+		}
+		pinnedAlive := false
+		for _, s := range a.servers {
+			if s.Name == a.settings.Pinned && s.Ping > 0 {
+				pinnedAlive = true
+			}
+		}
+		if best >= 0 && !pinnedAlive && (a.cur < 0 || a.cur >= len(a.servers) || a.servers[a.cur].Ping <= 0) {
+			a.cur = best
+			a.event = fmt.Sprintf("%s — сервер не отвечал; по тесту скорости выбран «%s» (%.0f Мбит/с)",
+				time.Now().Format("15:04"), a.servers[best].Name, a.speed[a.servers[best].Name])
+			a.rememberCur()
+		}
+		a.mu.Unlock()
+		badSince = time.Time{}
+	}
+}

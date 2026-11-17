@@ -210,8 +210,9 @@ func buildCmdline(zdir, strategy string, warp bool) (string, error) {
 		args = strings.ReplaceAll(args, ip, ip+` --ipset="`+lists+`ipset-vpnauto.txt"`)
 	}
 
-	if warp {
-		// порты WARP — в перехват, и профиль для серверов WARP — первым
+	if warp && warpExcludeMode {
+		// запасной режим: серверы WARP исключены из общих правил — отдельный профиль только для
+		// рукопожатия WireGuard (порты WARP — в перехват, профиль — первым)
 		args = regexp.MustCompile(`--wf-udp=(\S+)`).ReplaceAllString(args, "--wf-udp=${1},"+warpUDPPorts)
 		// только рукопожатие WireGuard (UDP, не 443); TLS/MASQUE не трогаем — иначе WARP видит
 		// подмену пакетов (CF_HAPPY_EYEBALLS_MITM_FAILURE)
@@ -242,8 +243,15 @@ func writeZapretLists(zdir string) error {
 		"ipset-vpnauto.txt":        telegramCIDRs,
 		"ipset-warp.txt":           warpCIDRs,
 		"ipset-exclude-vpnauto.txt": func() []string {
-			// серверы VPN и серверы WARP запрет не трогает
-			return append(append([]string{}, warpCIDRs...), vpnServerIPs...)
+			// серверы VPN запрет не трогает; серверы WARP — только в запасном режиме
+			ips := append([]string{}, vpnServerIPs...)
+			if warpExcludeMode {
+				ips = append(ips, warpCIDRs...)
+			}
+			if len(ips) == 0 {
+				ips = []string{"203.0.113.114/32"} // пустой список winws не принимает
+			}
+			return ips
 		}(),
 	}
 	for name, lines := range files {
@@ -369,6 +377,10 @@ func resolveServerIPs(servers []*Server) []string {
 	}
 	return out
 }
+
+// Запасной режим WARP (см. zCmd.WarpExclude): в задаче — из команды, в программе — после ошибки MITM.
+var warpExcludeMode bool
+var appWarpExclude atomic.Bool
 
 // Отмена перебора вариантов WARP (выключили WARP или переключились на VPN).
 var warpCancel atomic.Bool

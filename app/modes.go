@@ -205,6 +205,19 @@ func (a *App) zapretOff() {
 func (a *App) warpUp() {
 	zSet(func(z *zInfo) { z.warpBusy, z.warpErr = true, "" })
 	err := warpConnect()
+	// WARP видит подмену своих пакетов (так бывает на части сетей) — запасной режим:
+	// запрет перестаёт трогать серверы WARP, пробуем ещё раз
+	if err != nil && err != errWarpCanceled && strings.Contains(err.Error(), "искажается") && !appWarpExclude.Load() {
+		appWarpExclude.Store(true)
+		a.mu.Lock()
+		strategy := a.settings.ZStrategy
+		a.mu.Unlock()
+		if strategy != "" && winwsRunning() {
+			log.Println("WARP: подмена пакетов — запрет больше не трогает серверы WARP, повторяю")
+			zapretRun(zCmd{Action: "start", Strategy: strategy, Warp: true}, 25*time.Second)
+			err = warpConnect()
+		}
+	}
 	if err == errWarpCanceled {
 		warpExec("disconnect")
 		err = nil
