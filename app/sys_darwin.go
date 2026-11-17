@@ -66,7 +66,7 @@ func msgBox(text string, flags uintptr) int {
 	if flags&0x4 != 0 {
 		buttons = `buttons {"Нет", "Да"} default button "Да"`
 	}
-	script := fmt.Sprintf(`display dialog %s with title "VPN Auto" %s with icon %s`, asStr(text), buttons, icon)
+	script := fmt.Sprintf(`display dialog %s with title "NETtool" %s with icon %s`, asStr(text), buttons, icon)
 	out, err := exec.Command("osascript", "-e", script).Output()
 	if err != nil {
 		return 7
@@ -82,7 +82,7 @@ func askButtons(text string, buttons ...string) string {
 	for i, b := range buttons {
 		q[i] = asStr(b)
 	}
-	script := fmt.Sprintf(`display dialog %s with title "VPN Auto" buttons {%s} default button %s with icon note`,
+	script := fmt.Sprintf(`display dialog %s with title "NETtool" buttons {%s} default button %s with icon note`,
 		asStr(text), strings.Join(q, ", "), q[len(q)-1])
 	out, err := exec.Command("osascript", "-e", script).Output()
 	if err != nil {
@@ -152,9 +152,9 @@ func setSysProxy(on bool) error {
 	if len(lines) == 0 {
 		return fmt.Errorf("не найдено сетевых подключений")
 	}
-	prompt := "VPN Auto хочет включить VPN (изменить настройки прокси)."
+	prompt := "NETtool хочет включить VPN (изменить настройки прокси)."
 	if !on {
-		prompt = "VPN Auto хочет выключить VPN (вернуть настройки прокси)."
+		prompt = "NETtool хочет выключить VPN (вернуть настройки прокси)."
 	}
 	return runShell(lines, prompt)
 }
@@ -172,7 +172,7 @@ func cleanupStaleProxy() {
 }
 
 // ---------- установка в «Программы» ----------
-const appBundleDst = "/Applications/VPN Auto.app"
+const appBundleDst = "/Applications/NETtool.app"
 
 func selfInstall() bool {
 	exe, err := os.Executable()
@@ -194,10 +194,10 @@ func selfInstall() bool {
 
 	_, existsErr := os.Stat(appBundleDst)
 	updating := existsErr == nil
-	text := "Установить VPN Auto в папку «Программы»?"
+	text := "Установить NETtool в папку «Программы»?"
 	btn := "Установить"
 	if updating {
-		text = "В «Программах» уже есть VPN Auto. Обновить его до версии " + appVersion + "?"
+		text = "В «Программах» уже есть NETtool. Обновить его до версии " + appVersion + "?"
 		btn = "Обновить"
 	}
 	ans := askButtons(text, "Не устанавливать", btn)
@@ -208,26 +208,28 @@ func selfInstall() bool {
 		os.WriteFile(marker, []byte("1"), 0644)
 		return false
 	}
-	addDock := askButtons("Добавить значок VPN Auto в Dock?", "Нет", "Добавить") == "Добавить"
+	addDock := askButtons("Добавить значок NETtool в Dock?", "Нет", "Добавить") == "Добавить"
 
 	// закрываем уже установленную копию, если она запущена
-	exec.Command("pkill", "-f", "^/Applications/VPN Auto.app/Contents/MacOS/").Run()
+	exec.Command("pkill", "-f", "^/Applications/NETtool.app/Contents/MacOS/").Run()
+	exec.Command("pkill", "-f", "^/Applications/VPN Auto.app/Contents/MacOS/").Run() // прежнее название
 	killProcess(coreName)
 
 	lines := []string{
 		"rm -rf " + shq(appBundleDst),
+		"rm -rf '/Applications/VPN Auto.app'", // прежнее название программы
 		"ditto " + shq(bundle) + " " + shq(appBundleDst),
 		"xattr -dr com.apple.quarantine " + shq(appBundleDst) + " || true",
 	}
-	if err := runShell(lines, "VPN Auto хочет установить себя в папку «Программы»."); err != nil {
+	if err := runShell(lines, "NETtool хочет установить себя в папку «Программы»."); err != nil {
 		msgBox("Не удалось установить: "+err.Error(), 0x10)
 		return false
 	}
 	if addDock {
 		out, _ := exec.Command("defaults", "read", "com.apple.dock", "persistent-apps").Output()
-		if !strings.Contains(string(out), "VPN%20Auto.app") {
+		if !strings.Contains(string(out), "NETtool.app") {
 			exec.Command("defaults", "write", "com.apple.dock", "persistent-apps", "-array-add",
-				`<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>file:///Applications/VPN%20Auto.app/</string><key>_CFURLStringType</key><integer>15</integer></dict></dict></dict>`).Run()
+				`<dict><key>tile-data</key><dict><key>file-data</key><dict><key>_CFURLString</key><string>file:///Applications/NETtool.app/</string><key>_CFURLStringType</key><integer>15</integer></dict></dict></dict>`).Run()
 			exec.Command("killall", "Dock").Run()
 		}
 	}

@@ -91,8 +91,8 @@ func TestUpdateVersion(t *testing.T) {
 	if !versionNewer("1.10.0", "1.9.1") || versionNewer("1.9.1", "1.9.1") || versionNewer("1.9.0", "1.9.1") {
 		t.Fatal("ver")
 	}
-	m := readSums(strings.NewReader("abc123  VPN-Auto-Setup.exe\ndef *VPN-Auto-macOS.zip\n"))
-	if m["VPN-Auto-Setup.exe"] != "abc123" || m["VPN-Auto-macOS.zip"] != "def" {
+	m := readSums(strings.NewReader("abc123  NETtool-Setup.exe\ndef *NETtool-macOS.zip\n"))
+	if m["NETtool-Setup.exe"] != "abc123" || m["NETtool-macOS.zip"] != "def" {
 		t.Fatal(m)
 	}
 }

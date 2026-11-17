@@ -22,14 +22,17 @@ import (
 	"time"
 )
 
-// Репозиторий с выпусками (владелец/имя).
-var updateRepo = "Slugerbmp/VPNAutoTool"
+// Репозиторий с выпусками (владелец/имя). Проект переименован в NETtool: пробуем новое имя,
+// затем прежнее (GitHub перенаправляет со старого имени после переименования).
+var updateRepos = []string{"Slugerbmp/NETtool", "Slugerbmp/VPNAutoTool"}
+
+var updateRepo = updateRepos[0]
 
 var updateAPI = "https://api.github.com"
 
 const (
-	assetWin = "VPN-Auto-Setup.exe"
-	assetMac = "VPN-Auto-macOS.zip"
+	assetWin = "NETtool-Setup.exe"
+	assetMac = "NETtool-macOS.zip"
 	assetSum = "SHA256SUMS.txt"
 )
 
@@ -63,7 +66,7 @@ func (a *App) updGet(u string) (*http.Response, error) {
 	var last error
 	for _, c := range a.updClients() {
 		req, _ := http.NewRequest("GET", u, nil)
-		req.Header.Set("User-Agent", "VPN-Auto/"+appVersion)
+		req.Header.Set("User-Agent", "NETtool/"+appVersion)
 		resp, err := c.Do(req)
 		if err == nil && resp.StatusCode == 200 {
 			return resp, nil
@@ -78,7 +81,14 @@ func (a *App) updGet(u string) (*http.Response, error) {
 }
 
 func (a *App) checkUpdate() error {
-	resp, err := a.updGet(updateAPI + "/repos/" + updateRepo + "/releases/latest")
+	var resp *http.Response
+	var err error
+	for _, repo := range updateRepos {
+		if resp, err = a.updGet(updateAPI + "/repos/" + repo + "/releases/latest"); err == nil {
+			updateRepo = repo
+			break
+		}
+	}
 	if err != nil {
 		upd.Lock()
 		upd.err, upd.checked = "не удалось проверить обновления: "+err.Error(), time.Now()

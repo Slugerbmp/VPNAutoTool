@@ -101,7 +101,7 @@ func zapretSetupTask() error {
 	user := os.Getenv("USERDOMAIN") + `\` + os.Getenv("USERNAME")
 	x := `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
-  <RegistrationInfo><Description>VPN Auto: включение и выключение Zapret без запроса UAC</Description></RegistrationInfo>
+  <RegistrationInfo><Description>NETtool: включение и выключение Zapret без запроса UAC</Description></RegistrationInfo>
   <Principals><Principal id="Author"><UserId>` + xmlEsc(user) + `</UserId><LogonType>InteractiveToken</LogonType><RunLevel>HighestAvailable</RunLevel></Principal></Principals>
   <Settings>
     <MultipleInstancesPolicy>Queue</MultipleInstancesPolicy>

@@ -20,13 +20,14 @@ func runUpdateInstaller(zip string) error {
 		return errors.New("программа запущена не из пакета .app — обновите вручную")
 	}
 	app := exe[:i+4]
+	dst := filepath.Join(filepath.Dir(app), "NETtool.app") // новое название программы
 	q := func(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 	tmp := filepath.Join(filepath.Dir(zip), "unpacked")
 	script := fmt.Sprintf(`while kill -0 %d 2>/dev/null; do sleep 0.5; done
 rm -rf %[2]s && mkdir -p %[2]s && ditto -xk %[3]s %[2]s || exit 1
 new=$(find %[2]s -maxdepth 2 -name '*.app' -type d | head -1)
 [ -n "$new" ] || exit 1
-rm -rf %[4]s && mv "$new" %[4]s && xattr -cr %[4]s; open %[4]s`, os.Getpid(), q(tmp), q(zip), q(app))
+rm -rf %[4]s %[5]s && mv "$new" %[5]s && xattr -cr %[5]s; open %[5]s`, os.Getpid(), q(tmp), q(zip), q(app), q(dst))
 	cmd := exec.Command("/bin/sh", "-c", script)
 	return cmd.Start()
 }

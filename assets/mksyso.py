@@ -52,7 +52,7 @@ if 'ver' in opts:
     v = [int(x) for x in (opts['ver'].split('.') + ['0', '0', '0'])[:4]]
     ms, ls = (v[0] << 16) | v[1], (v[2] << 16) | v[3]
     fixed = struct.pack('<13I', 0xFEEF04BD, 0x00010000, ms, ls, ms, ls, 0x3F, 0, 0x00040004, 1, 0, 0, 0)
-    name = opts.get('name', 'VPN Auto')
+    name = opts.get('name', 'NETtool')
     strings = [('CompanyName', 'undr'), ('FileDescription', opts.get('desc', name)), ('FileVersion', opts['ver']),
                ('InternalName', opts.get('file', 'VPNAuto.exe').rsplit('.', 1)[0]), ('LegalCopyright', '© undr'),
                ('OriginalFilename', opts.get('file', 'VPNAuto.exe')), ('ProductName', name), ('ProductVersion', opts['ver'])]
@@ -68,7 +68,7 @@ if 'ver' in opts:
     types.append((16, [(1, vs)]))
     manifest = b'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity type="win32" name="undr.VPNAuto" version="%d.%d.%d.%d"/>
+  <assemblyIdentity type="win32" name="undr.NETtool" version="%d.%d.%d.%d"/>
   <description>%s</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges>
     <requestedExecutionLevel level="asInvoker" uiAccess="false"/>

@@ -10,11 +10,11 @@ $fSans  = New-Object System.Drawing.Font('Segoe UI', 9.5)
 $fCaps  = New-Object System.Drawing.Font('Segoe UI Semibold', 8)
 $fBig   = New-Object System.Drawing.Font('Segoe UI', 22, [System.Drawing.FontStyle]::Bold)
 $fMono  = New-Object System.Drawing.Font('Consolas', 9)
-function Spaced($s) { (($s.ToUpper()).ToCharArray() -join [char]0x200A) }  # разрядка, как в интерфейсе
+function Spaced($s, [switch]$Keep) { $t = if ($Keep) { $s } else { $s.ToUpper() }; ($t.ToCharArray() -join [char]0x200A) }  # разрядка, как в интерфейсе
 
 $W = 540; $H = 470
 $f = New-Object System.Windows.Forms.Form
-$f.Text = 'Установка VPN Auto ' + $env:VA_VER
+$f.Text = 'Установка NETtool ' + $env:VA_VER
 $f.FormBorderStyle = 'None'; $f.ClientSize = New-Object System.Drawing.Size($W, $H)
 $f.StartPosition = 'CenterScreen'; $f.TopMost = $true; $f.ShowInTaskbar = $true
 $f.BackColor = $BG; $f.ForeColor = $FG; $f.Font = $fSans
@@ -54,7 +54,7 @@ $up = { $script:drag = $null }
 foreach ($c in @($bar, $barT)) { $c.Add_MouseDown($down); $c.Add_MouseMove($move); $c.Add_MouseUp($up) }
 
 # --- шапка ---
-[void](Lbl (Spaced 'VPN Auto') 24 48 $fCaps $FG)
+[void](Lbl (Spaced 'NETtool' -Keep) 24 48 $fCaps $FG)
 [void](Lbl ('v' + $env:VA_VER + ' · undr') ($W - 130) 48 $fMono $MUT)
 $hdr = Line 70; $hdr.BackColor = $FG; $hdr.Height = 2
 [void](Lbl $env:VA_BTN.ToUpper() 20 84 $fBig $FG)
@@ -79,12 +79,12 @@ $br = Btn (Spaced 'Обзор') ($W - 24 - 92) 185 92 $false
 $br.Height = 26
 $br.Add_Click({
     $d = New-Object System.Windows.Forms.FolderBrowserDialog
-    $d.Description = 'Выберите папку — внутри неё будет создана папка «VPN Auto»'
+    $d.Description = 'Выберите папку — внутри неё будет создана папка «NETtool»'
     $parent = Split-Path $tb.Text -Parent
     if ($parent -and (Test-Path $parent)) { $d.SelectedPath = $parent }
     if ($d.ShowDialog($f) -eq 'OK') {
         $p = $d.SelectedPath
-        if ((Split-Path $p -Leaf) -ne 'VPN Auto') { $p = Join-Path $p 'VPN Auto' }
+        $leaf = Split-Path $p -Leaf; if ($leaf -ne 'NETtool' -and $leaf -ne 'VPN Auto') { $p = Join-Path $p 'NETtool' }
         $tb.Text = $p
     }
 })

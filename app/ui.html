@@ -2,8 +2,8 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<title>VPN Auto</title>
-<link rel="icon" type="image/png" href="/favicon.png?v=1113">
+<title>NETtool</title>
+<link rel="icon" type="image/png" href="/favicon.png?v=1120">
 <meta name="theme-color" id="themeColor" content="#0a0a0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -26,7 +26,7 @@
   /* шапка */
   header{display:flex;align-items:baseline;gap:10px;padding-bottom:14px;border-bottom:1.5px solid var(--fg)}
   header img{display:none}
-  header .t{font:700 11px/1 var(--sans);letter-spacing:.32em;text-transform:uppercase}
+  header .t{font:700 11px/1 var(--sans);letter-spacing:.32em;text-transform:none}
   .pill{margin-left:auto;font:500 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
   .pill i{display:none}
   .pill.on{color:var(--fg)} .pill.on::before{content:"■ "} .pill.fb{color:var(--fg)} .pill.fb::before{content:"□ "}
@@ -144,7 +144,7 @@
   #tb{display:none;position:fixed;top:0;left:0;right:0;height:30px;z-index:50;background:var(--bg);border-bottom:1px solid var(--line);align-items:stretch;cursor:default}
   html.cf #tb{display:flex} html.cf body{padding-top:48px} html.cf body.mini{padding-top:44px}
   html.cf{border:1px solid var(--line);min-height:100vh}
-  #tb .d{flex:1;display:flex;align-items:center;padding-left:12px;font:600 10px/1 var(--sans);letter-spacing:.32em;text-transform:uppercase;color:var(--mut)}
+  #tb .d{flex:1;display:flex;align-items:center;padding-left:12px;font:600 10px/1 var(--sans);letter-spacing:.32em;text-transform:none;color:var(--mut)}
   #tb button{all:unset;width:44px;display:flex;align-items:center;justify-content:center;font:400 14px/1 var(--mono);color:var(--mut)}
   #tb button:hover{background:var(--raise);color:var(--fg)} #tb #tbX:hover{background:var(--fg);color:var(--bg)}
   #grip{display:none;position:fixed;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:50;
@@ -153,11 +153,11 @@
 </style>
 </head>
 <body>
-  <div id="tb"><div class="d" id="tbD">VPN Auto</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
+  <div id="tb"><div class="d" id="tbD">NETtool</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
   <div id="grip"></div>
   <header>
-    <img src="/favicon.png?v=1113" alt="">
-    <span class="t">VPN Auto</span>
+    <img src="/favicon.png?v=1120" alt="">
+    <span class="t">NETtool</span>
     <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
   </header>
 
@@ -297,7 +297,7 @@ const $ = id => document.getElementById(id);
 let st = null, busyPower = false;
 const MINI = new URLSearchParams(location.search).has('mini');
 if (MINI) {
-  document.body.classList.add('mini'); document.title = 'VPN Auto · мини';
+  document.body.classList.add('mini'); document.title = 'NETtool · мини';
   try { window.resizeTo(340, 470); window.moveTo(screen.availLeft + screen.availWidth - 350, screen.availTop + screen.availHeight - 480); } catch {}
 }
 const darkQ = matchMedia('(prefers-color-scheme: dark)');
@@ -704,7 +704,7 @@ async function tick(){
     if (t === lastStateText && busyPower === lastBusy) return;
     lastStateText = t; lastBusy = busyPower; st = JSON.parse(t); render();
   }
-  catch { $('msg').textContent = 'Нет связи с программой — запустите VPN Auto заново'; }
+  catch { $('msg').textContent = 'Нет связи с программой — запустите NETtool заново'; }
 }
 async function loadLogs(){
   const r = await api('log');
@@ -804,10 +804,10 @@ $('mFull').onclick = () => { api('full', {}); setTimeout(() => window.close(), 3
 $('logOpen').onclick = () => api('openlogs', {});
 $('logRef').onclick = loadLogs;
 $('quit').onclick = async () => {
-  if (!confirm('Выйти из VPN Auto? Всё будет выключено.')) return;
+  if (!confirm('Выйти из NETtool? Всё будет выключено.')) return;
   clearInterval(timer);
   await api('tray?do=quit');
-  document.body.innerHTML = '<p style="padding:30px;color:#7d8793">VPN Auto закрыт. Окно можно закрыть.</p>';
+  document.body.innerHTML = '<p style="padding:30px;color:#7d8793">NETtool закрыт. Окно можно закрыть.</p>';
   setTimeout(() => window.close(), 800);
 };
 

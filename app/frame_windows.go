@@ -70,7 +70,7 @@ type frameHost struct {
 	start      rect
 }
 
-var uiTitles = []string{"VPN Auto", "VPN Auto · мини"}
+var uiTitles = []string{"NETtool", "NETtool · мини"}
 
 var frame = struct {
 	sync.Mutex

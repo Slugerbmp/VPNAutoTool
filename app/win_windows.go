@@ -62,13 +62,13 @@ func openURL(u string) {
 
 func msgBox(text string, flags uintptr) int {
 	t, _ := syscall.UTF16PtrFromString(text)
-	c, _ := syscall.UTF16PtrFromString("VPN Auto")
+	c, _ := syscall.UTF16PtrFromString("NETtool")
 	r, _, _ := procMsgBox.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags)
 	return int(r)
 }
 
 func uninstall() {
-	if msgBox("Удалить VPN Auto с этого компьютера?", 0x4|0x20) != 6 {
+	if msgBox("Удалить NETtool с этого компьютера?", 0x4|0x20) != 6 {
 		return
 	}
 	if zapretTaskExists() {
@@ -82,15 +82,16 @@ func uninstall() {
 	cleanupStaleProxy()
 	setAutostart(false)
 	ps := `$d=[Environment]::GetFolderPath('Desktop'); $p=[Environment]::GetFolderPath('Programs');` +
-		`Remove-Item -LiteralPath (Join-Path $d 'VPN Auto.lnk') -ErrorAction SilentlyContinue;` +
-		`Remove-Item -LiteralPath (Join-Path $p 'VPN Auto.lnk') -ErrorAction SilentlyContinue`
+		`foreach($n in 'NETtool.lnk','VPN Auto.lnk'){` +
+		`Remove-Item -LiteralPath (Join-Path $d $n) -ErrorAction SilentlyContinue;` +
+		`Remove-Item -LiteralPath (Join-Path $p $n) -ErrorAction SilentlyContinue}`
 	hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run()
 	hiddenCmd("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`, "/f").Run()
 	os.RemoveAll(dataDir)
 
 	exe, _ := os.Executable()
 	dir := filepath.Dir(exe)
-	if !strings.EqualFold(filepath.Base(dir), "VPN Auto") {
+	if b := filepath.Base(dir); !strings.EqualFold(b, "NETtool") && !strings.EqualFold(b, "VPN Auto") {
 		// программа лежит не в своей папке — удаляем только свои файлы
 		if m, _ := filepath.Glob(filepath.Join(dir, "icon*.ico")); len(m) > 0 {
 			for _, f := range m {
@@ -101,14 +102,14 @@ func uninstall() {
 		c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000,
 			CmdLine: fmt.Sprintf(`cmd /c ping 127.0.0.1 -n 3 >nul & del /f /q "%s"`, exe)}
 		c.Start()
-		msgBox("VPN Auto удалён.", 0x40)
+		msgBox("NETtool удалён.", 0x40)
 		return
 	}
 	c := exec.Command("cmd")
 	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000,
 		CmdLine: fmt.Sprintf(`cmd /c ping 127.0.0.1 -n 3 >nul & rmdir /s /q "%s"`, dir)}
 	c.Start()
-	msgBox("VPN Auto удалён.", 0x40)
+	msgBox("NETtool удалён.", 0x40)
 }
 
 const coreName = "vpnauto-core.exe"
@@ -157,12 +158,13 @@ func openFolder(p string) { exec.Command("explorer", p).Start() }
 const runKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
 
 func setAutostart(on bool) error {
+	hiddenCmd("reg", "delete", runKey, "/v", "VPN Auto", "/f").Run() // прежнее название
 	if !on {
-		hiddenCmd("reg", "delete", runKey, "/v", "VPN Auto", "/f").Run()
+		hiddenCmd("reg", "delete", runKey, "/v", "NETtool", "/f").Run()
 		return nil
 	}
 	exe, _ := os.Executable()
-	if out, err := hiddenCmd("reg", "add", runKey, "/v", "VPN Auto", "/t", "REG_SZ", "/d", `"`+exe+`" --autostart`, "/f").CombinedOutput(); err != nil {
+	if out, err := hiddenCmd("reg", "add", runKey, "/v", "NETtool", "/t", "REG_SZ", "/d", `"`+exe+`" --autostart`, "/f").CombinedOutput(); err != nil {
 		return fmt.Errorf("автозапуск: %s", strings.TrimSpace(string(out)))
 	}
 	return nil

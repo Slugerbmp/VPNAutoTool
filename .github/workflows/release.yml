@@ -41,17 +41,19 @@ jobs:
         id: notes
         run: |
           f="docs/release-notes/${{ steps.ver.outputs.tag }}.md"
-          [ -f "$f" ] || { echo "VPN Auto ${{ steps.ver.outputs.tag }}" > /tmp/notes.md; f=/tmp/notes.md; }
+          [ -f "$f" ] || { echo "NETtool ${{ steps.ver.outputs.tag }}" > /tmp/notes.md; f=/tmp/notes.md; }
           echo "file=$f" >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2
         if: steps.ver.outputs.new == 'true'
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: VPN Auto ${{ steps.ver.outputs.tag }}
+          name: NETtool ${{ steps.ver.outputs.tag }}
           body_path: ${{ steps.notes.outputs.file }}
           files: |
+            dist/NETtool-Setup.exe
+            dist/NETtool-macOS.zip
+            dist/NETtool-*.zip
             dist/VPN-Auto-Setup.exe
             dist/VPN-Auto-macOS.zip
-            dist/VPN-Auto-*.zip
             dist/SHA256SUMS.txt

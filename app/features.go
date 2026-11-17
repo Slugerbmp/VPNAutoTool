@@ -89,7 +89,7 @@ func (a *App) notifier() {
 				if i := strings.Index(txt, " — "); i >= 0 && i < 8 {
 					txt = txt[i+len(" — "):]
 				}
-				notify("VPN Auto", txt)
+				notify("NETtool", txt)
 			}
 		}
 	}

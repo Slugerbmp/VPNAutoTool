@@ -131,7 +131,7 @@ func startTray() bool {
 		}
 		taskbarCreated, _, _ = pRegisterWindowMessage.Call(uintptr(unsafe.Pointer(utf16p("TaskbarCreated"))))
 		tray.mu.Lock()
-		tray.hwnd, tray.iconOn, tray.iconOff, tray.tip = hwnd, on, off, "VPN Auto"
+		tray.hwnd, tray.iconOn, tray.iconOff, tray.tip = hwnd, on, off, "NETtool"
 		tray.mu.Unlock()
 		ok := trayNotify(0) // NIM_ADD
 		tray.mu.Lock()
@@ -244,7 +244,7 @@ func showTrayMenu(hwnd uintptr) {
 		return 0
 	}
 
-	add(m, 1, 0, "Открыть VPN Auto")
+	add(m, 1, 0, "Открыть NETtool")
 	sep(m)
 
 	zapret := st.Mode == "zapret"
@@ -389,7 +389,7 @@ func openOrFocusUI() {
 // ---------- окно интерфейса как отдельное приложение на панели задач ----------
 // Окно открывается через Edge, и Windows считает его окном Edge (значок Edge при закреплении).
 // Назначаем окну свой AppUserModelID, команду перезапуска и значок — тогда закреплённый
-// значок будет с ключиком и будет запускать VPN Auto.
+// значок будет с ключиком и будет запускать NETtool.
 
 var (
 	ole32                        = syscall.NewLazyDLL("ole32.dll")
@@ -425,7 +425,7 @@ var (
 
 const appUserModelID = "VPNAuto.App"
 
-func findUIWindow() uintptr { return findWindowTitle("VPN Auto") }
+func findUIWindow() uintptr { return findWindowTitle("NETtool") }
 
 func brandWindow(hwnd uintptr) bool {
 	runtime.LockOSThread()
@@ -445,7 +445,7 @@ func brandWindow(hwnd uintptr) bool {
 		{5, appUserModelID},    // System.AppUserModel.ID
 		{2, `"` + exe + `"`},   // RelaunchCommand
 		{3, relaunchIcon(exe)}, // RelaunchIconResource
-		{4, "VPN Auto"},        // RelaunchDisplayNameResource
+		{4, "NETtool"},         // RelaunchDisplayNameResource
 	}
 	ok := true
 	// команду перезапуска и значок задаём раньше ID — так требует Windows
@@ -548,11 +548,11 @@ func hotkeyProc(hwnd, msg, wp uintptr) bool {
 		go func() {
 			if app.anyOn() {
 				app.allOff()
-				notify("VPN Auto", "Выключено (Ctrl+Alt+V)")
+				notify("NETtool", "Выключено (Ctrl+Alt+V)")
 			} else if err := app.modeOn(); err != nil {
-				notify("VPN Auto", err.Error())
+				notify("NETtool", err.Error())
 			} else {
-				notify("VPN Auto", "Включено (Ctrl+Alt+V)")
+				notify("NETtool", "Включено (Ctrl+Alt+V)")
 			}
 		}()
 		return true
@@ -562,7 +562,7 @@ func hotkeyProc(hwnd, msg, wp uintptr) bool {
 
 // Мини-окно у трея.
 func openMini() {
-	if h := findWindowTitle("VPN Auto · мини"); h != 0 {
+	if h := findWindowTitle("NETtool · мини"); h != 0 {
 		pShowWindow.Call(h, 9)
 		pSetForegroundWindow.Call(h)
 		return
@@ -572,7 +572,7 @@ func openMini() {
 
 // Закрыть окна интерфейса (полное и мини) и процессы браузера с профилем программы.
 func closeUIWindows() {
-	for _, t := range []string{"VPN Auto", "VPN Auto · мини"} {
+	for _, t := range []string{"NETtool", "NETtool · мини"} {
 		for i := 0; i < 10; i++ {
 			h := findWindowTitle(t)
 			if h == 0 {

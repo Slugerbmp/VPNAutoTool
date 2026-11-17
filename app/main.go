@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.11.3"
+	appVersion = "1.12.0"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -308,6 +308,8 @@ func (a *App) loadSettings() {
 		a.settings.Autostart = strings.TrimSpace(string(b)) == "1"
 		go setAutostart(a.settings.Autostart)
 		a.saveSettings()
+	} else if a.settings.Autostart {
+		go setAutostart(true) // переименование в NETtool: обновить запись автозапуска
 	}
 }
 
@@ -1102,9 +1104,9 @@ func (a *App) ensureCore() {
 func (a *App) trayUpdater() {
 	for {
 		a.mu.Lock()
-		tip := "VPN Auto — выключен"
+		tip := "NETtool — выключен"
 		if a.on {
-			tip = "VPN Auto — VPN включён"
+			tip = "NETtool — VPN включён"
 		}
 		if a.cur >= 0 && a.cur < len(a.servers) {
 			s := a.servers[a.cur]
@@ -1120,7 +1122,7 @@ func (a *App) trayUpdater() {
 		zi.mu.Lock()
 		if zi.running {
 			on = true
-			tip = "VPN Auto — запрет включён"
+			tip = "NETtool — запрет включён"
 			if zi.warpOn {
 				tip += " + WARP"
 			}

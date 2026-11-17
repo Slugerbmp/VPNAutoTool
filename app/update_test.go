@@ -18,11 +18,11 @@ func TestUpdateFlow(t *testing.T) {
 	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case strings.HasSuffix(r.URL.Path, "/releases/latest"):
-			fmt.Fprintf(w, `{"tag_name":"v99.0.0","html_url":"x","assets":[{"name":"VPN-Auto-Setup.exe","browser_download_url":"%[1]s/a"},{"name":"VPN-Auto-macOS.zip","browser_download_url":"%[1]s/a"},{"name":"SHA256SUMS.txt","browser_download_url":"%[1]s/s"}]}`, srv.URL)
+			fmt.Fprintf(w, `{"tag_name":"v99.0.0","html_url":"x","assets":[{"name":"NETtool-Setup.exe","browser_download_url":"%[1]s/a"},{"name":"NETtool-macOS.zip","browser_download_url":"%[1]s/a"},{"name":"SHA256SUMS.txt","browser_download_url":"%[1]s/s"}]}`, srv.URL)
 		case r.URL.Path == "/a":
 			w.Write(payload)
 		case r.URL.Path == "/s":
-			fmt.Fprintf(w, "%s  VPN-Auto-Setup.exe\n%s  VPN-Auto-macOS.zip\n", hex.EncodeToString(sum[:]), hex.EncodeToString(sum[:]))
+			fmt.Fprintf(w, "%s  NETtool-Setup.exe\n%s  NETtool-macOS.zip\n", hex.EncodeToString(sum[:]), hex.EncodeToString(sum[:]))
 		}
 	}))
 	defer srv.Close()
@@ -39,7 +39,7 @@ func TestUpdateFlow(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "только для Windows") {
 		t.Fatal("expected platform error after verified download, got", err)
 	}
-	if _, e := os.Stat(dataDir + "/update/VPN-Auto-Setup.exe"); e != nil {
+	if _, e := os.Stat(dataDir + "/update/NETtool-Setup.exe"); e != nil {
 		t.Fatal("not downloaded")
 	}
 }

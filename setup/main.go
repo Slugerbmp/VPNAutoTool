@@ -2,7 +2,7 @@
 
 package main
 
-// Установщик VPN Auto: окно с выбором папки и галочками, ярлыки,
+// Установщик NETtool: окно с выбором папки и галочками, ярлыки,
 // регистрация в «Установке и удалении программ». Повторный запуск обновляет программу.
 // Права администратора не нужны (если не выбрать системную папку).
 
@@ -29,14 +29,14 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-const version = "1.11.3"
+const version = "1.12.0"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
 
 func msgBox(text string, flags uintptr) int {
 	t, _ := syscall.UTF16PtrFromString(text)
-	c, _ := syscall.UTF16PtrFromString("Установка VPN Auto")
+	c, _ := syscall.UTF16PtrFromString("Установка NETtool")
 	r, _, _ := procMsgBox.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags)
 	return int(r)
 }
@@ -76,12 +76,12 @@ func existingInstall() string {
 }
 
 func desktopShortcutExists() bool {
-	out, _ := runPS(`Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) 'VPN Auto.lnk')`)
+	out, _ := runPS(`$d=[Environment]::GetFolderPath('Desktop'); (Test-Path -LiteralPath (Join-Path $d 'NETtool.lnk')) -or (Test-Path -LiteralPath (Join-Path $d 'VPN Auto.lnk'))`)
 	return strings.Contains(string(out), "True")
 }
 
 func main() {
-	defDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "VPN Auto")
+	defDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "NETtool")
 	old := existingInstall()
 	updating := old != ""
 	if updating {
@@ -131,7 +131,7 @@ func main() {
 			"VA_OUT="+outFile, "VA_MODE="+mode, "VA_BTN="+btn, "VA_ZAP="+zap, "VA_WARP="+warpDef, "VA_TG="+tgDef)
 		if err := cmd.Run(); err != nil {
 			// окно не открылось — упрощённый вариант
-			if msgBox(btn+" VPN Auto "+version+"?\n\nПапка: "+defDir, 0x4|0x20) != 6 {
+			if msgBox(btn+" NETtool "+version+"?\n\nПапка: "+defDir, 0x4|0x20) != 6 {
 				return
 			}
 		} else {
@@ -155,8 +155,10 @@ func main() {
 			}
 		}
 	}
-	if !strings.EqualFold(filepath.Base(dir), "VPN Auto") {
-		dir = filepath.Join(dir, "VPN Auto") // своя отдельная папка — чтобы удаление ничего лишнего не задело
+	// своя отдельная папка — чтобы удаление ничего лишнего не задело
+	// (при обновлении остаётся прежняя «VPN Auto»: там запрет и задача планировщика)
+	if b := filepath.Base(dir); !strings.EqualFold(b, "NETtool") && !strings.EqualFold(b, "VPN Auto") {
+		dir = filepath.Join(dir, "NETtool")
 	}
 	exe := filepath.Join(dir, "VPNAuto.exe")
 	// значок берём прямо из VPNAuto.exe: путь не меняется между версиями, поэтому ярлыки
@@ -226,14 +228,17 @@ func main() {
 		os.Remove(old)
 	}
 
-	deskPS := `$d=[Environment]::GetFolderPath('Desktop'); Remove-Item -LiteralPath (Join-Path $d 'VPN Auto.lnk') -ErrorAction SilentlyContinue;`
+	// прежние ярлыки «VPN Auto» убираем — программа теперь называется NETtool
+	deskPS := `$d=[Environment]::GetFolderPath('Desktop'); foreach($n in 'NETtool.lnk','VPN Auto.lnk'){Remove-Item -LiteralPath (Join-Path $d $n) -ErrorAction SilentlyContinue};` +
+		`Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk') -ErrorAction SilentlyContinue;`
 	if wantDesk {
-		deskPS = `$d=[Environment]::GetFolderPath('Desktop'); mk (Join-Path $d 'VPN Auto.lnk');`
+		deskPS = `$d=[Environment]::GetFolderPath('Desktop'); Remove-Item -LiteralPath (Join-Path $d 'VPN Auto.lnk') -ErrorAction SilentlyContinue; mk (Join-Path $d 'NETtool.lnk');` +
+			`Remove-Item -LiteralPath (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk') -ErrorAction SilentlyContinue;`
 	}
 	ps := fmt.Sprintf(`$w=New-Object -ComObject WScript.Shell;`+
 		`function mk($p){$s=$w.CreateShortcut($p);$s.TargetPath=%s;$s.WorkingDirectory=%s;$s.IconLocation=%s;`+
-		`$s.Description='VPN Auto by undr — автоматический выбор быстрого сервера';$s.Save()};`+
-		`mk (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk');`+deskPS+
+		`$s.Description='NETtool by undr — автовыбор VPN-сервера, запрет и WARP';$s.Save()};`+
+		`mk (Join-Path ([Environment]::GetFolderPath('Programs')) 'NETtool.lnk');`+deskPS+
 		// закреплённые ярлыки (панель задач, «Пуск»), созданные пользователем, — тоже на значок из exe
 		`$pin=Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned';`+
 		`Get-ChildItem -LiteralPath $pin -Recurse -Filter *.lnk -ErrorAction SilentlyContinue | ForEach-Object {`+
@@ -242,7 +247,7 @@ func main() {
 	runPS(ps)
 
 	for _, kv := range [][3]string{
-		{"DisplayName", "REG_SZ", "VPN Auto"},
+		{"DisplayName", "REG_SZ", "NETtool"},
 		{"DisplayVersion", "REG_SZ", version},
 		{"Publisher", "REG_SZ", "undr"},
 		{"DisplayIcon", "REG_SZ", ico},
@@ -298,7 +303,7 @@ func main() {
 		if updating {
 			word = "обновлён"
 		}
-		msgBox("Готово! VPN Auto "+word+".", 0x40)
+		msgBox("Готово! NETtool "+word+".", 0x40)
 	}
 }
 

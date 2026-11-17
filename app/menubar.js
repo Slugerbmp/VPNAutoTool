@@ -1,4 +1,4 @@
-// Значок VPN Auto в строке меню macOS (JavaScript for Automation).
+// Значок NETtool в строке меню macOS (JavaScript for Automation).
 // Запускается программой: osascript -l JavaScript menubar.js <адрес> <иконка>
 ObjC.import('Cocoa');
 
@@ -74,7 +74,7 @@ function run(argv) {
     rebuildServers(st);
     miToggle.setEnabled(!!(st.on || (st.core && cur)));
     item.button.setAppearsDisabled(!st.on);
-    item.button.setToolTip('VPN Auto — ' + (st.on ? 'включён' : 'выключен') + (cur ? '\n' + srv : ''));
+    item.button.setToolTip('NETtool — ' + (st.on ? 'включён' : 'выключен') + (cur ? '\n' + srv : ''));
   }
 
   ObjC.registerSubclass({
@@ -102,13 +102,13 @@ function run(argv) {
   }
   var menu = $.NSMenu.alloc.init;
   menu.setAutoenablesItems(false);
-  miStatus = mi('VPN Auto', null);
+  miStatus = mi('NETtool', null);
   miServer = mi('…', null);
   miToggle = mi('Включить VPN', 'toggle:');
   menu.addItem(miStatus);
   menu.addItem(miServer);
   menu.addItem($.NSMenuItem.separatorItem);
-  menu.addItem(mi('Открыть VPN Auto', 'openUI:'));
+  menu.addItem(mi('Открыть NETtool', 'openUI:'));
   menu.addItem(miToggle);
   srvMenu = $.NSMenu.alloc.initWithTitle('Серверы');
   srvMenu.setAutoenablesItems(false);
