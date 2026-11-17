@@ -195,3 +195,18 @@ func (a *App) repairRoutes(m *http.ServeMux) {
 		writeJSON(w, map[string]any{"busy": repair.busy, "lines": repair.lines})
 	})
 }
+
+// ensureShortcut — при каждом запуске: значок на диске C:, ярлык в «Пуске» ведёт на текущий exe
+// и связан с окном приложения.
+func ensureShortcut() {
+	if runtime.GOOS != "windows" {
+		return
+	}
+	ico := filepath.Join(dataDir, "NETtool.ico")
+	if b, err := os.ReadFile(ico); err != nil || len(b) != len(appIconData) {
+		os.WriteFile(ico, appIconData, 0644)
+	}
+	if repairShortcut(ico) {
+		log.Printf("ярлык NETtool в «Пуске» пересоздан")
+	}
+}

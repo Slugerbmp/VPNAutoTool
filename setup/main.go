@@ -29,7 +29,7 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-const version = "1.12.4"
+const version = "1.12.5"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")

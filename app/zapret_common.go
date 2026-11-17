@@ -210,6 +210,17 @@ func buildCmdline(zdir, strategy string, warp bool) (string, error) {
 		args = strings.ReplaceAll(args, ip, ip+` --ipset="`+lists+`ipset-vpnauto.txt"`)
 	}
 
+	if warp && !warpExcludeMode {
+		// WARP через запрет проходит благодаря общим правилам для адресов Cloudflare (ipset-all).
+		// Если в service.bat фильтр по IP выключен (вместо списка — заглушка), для WARP берём
+		// полный список из резервной копии — как при ручном запуске .bat со включённым ipset.
+		all := filepath.Join(zdir, "lists", "ipset-all.txt")
+		if st, err := os.Stat(all); err == nil && st.Size() < 200 {
+			if bk, err := os.Stat(all + ".backup"); err == nil && bk.Size() > 1000 {
+				args = strings.ReplaceAll(args, `ipset-all.txt"`, `ipset-all.txt.backup"`)
+			}
+		}
+	}
 	if warp && warpExcludeMode {
 		// запасной режим: серверы WARP исключены из общих правил — отдельный профиль только для
 		// рукопожатия WireGuard (порты WARP — в перехват, профиль — первым)

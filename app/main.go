@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.12.4"
+	appVersion = "1.12.5"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -270,7 +270,8 @@ func main() {
 	go app.updater()
 	go app.connWatch()
 	go defenderRefresh()
-	go app.geoLoop() // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
+	go ensureShortcut() // ярлык в «Пуске» + свой AppUserModelID (значок на панели задач)
+	go app.geoLoop()    // страны серверов: СНГ — не для автовыбора; вход Xbox — через зарубежные
 	go app.tgwsLoop()
 	go warpGUIStart() // значок Cloudflare WARP в трее вместе с нашим
 	go app.notifier()

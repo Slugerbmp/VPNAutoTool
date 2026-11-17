@@ -101,7 +101,17 @@ func xmlEsc(s string) string {
 // Вызывается с правами администратора: VPNAuto.exe --zapret-setup
 func zapretSetupTask() error {
 	exe, _ := os.Executable()
+	// пользователь задачи — по SID, а не по имени: с именами (учётные записи Microsoft,
+	// переименованные профили) schtasks /run отвечает «Параметр задан неверно»
 	user := os.Getenv("USERDOMAIN") + `\` + os.Getenv("USERNAME")
+	if tok, err := syscall.OpenCurrentProcessToken(); err == nil {
+		if tu, err := tok.GetTokenUser(); err == nil {
+			if sid, err := tu.User.Sid.String(); err == nil && sid != "" {
+				user = sid
+			}
+		}
+		tok.Close()
+	}
 	x := `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo><Description>NETtool: включение и выключение Zapret без запроса UAC</Description></RegistrationInfo>
@@ -192,6 +202,16 @@ func zapretRun(c zCmd, wait time.Duration) (zState, error) {
 		log.Println("задача запрета не запустилась:", strings.TrimSpace(decodeOEM(out)), "— пересоздаю")
 		if zapretRecreateTask() == nil {
 			out, err = hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput()
+		}
+	}
+	if err != nil {
+		// задача так и не запустилась — выполняем команду напрямую с правами администратора
+		// (Windows спросит разрешение), чтобы запрет всё равно включился
+		exe, _ := os.Executable()
+		ps := fmt.Sprintf(`Start-Process -FilePath '%s' -ArgumentList '--zapret-task' -Verb RunAs -WindowStyle Hidden`, strings.ReplaceAll(exe, "'", "''"))
+		if hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run() == nil {
+			log.Println("команда запрета выполнена напрямую (задача не работает)")
+			err = nil
 		}
 	}
 	if err != nil {
@@ -892,14 +912,29 @@ func zapretFilesOK() bool {
 func repairShortcut(ico string) bool {
 	progs := filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`)
 	lnk := filepath.Join(progs, "NETtool.lnk")
-	if _, err := os.Stat(lnk); err == nil {
+	exe, _ := os.Executable()
+	if _, err := os.Stat(lnk); err == nil && lnkTargetOK(lnk, exe) {
+		lnkSetAUMID(lnk)
 		return false
 	}
-	exe, _ := os.Executable()
 	ps := `$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut(` + psQuote(lnk) + `); $s.TargetPath=` + psQuote(exe) +
 		`; $s.WorkingDirectory=` + psQuote(filepath.Dir(exe)) + `; $s.IconLocation=` + psQuote(ico+",0") +
 		`; $s.Description='NETtool by undr'; $s.Save()`
 	hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run()
 	_, err := os.Stat(lnk)
+	if err == nil {
+		lnkSetAUMID(lnk)
+		shellRefresh()
+	}
 	return err == nil
+}
+
+// lnkTargetOK — ярлык указывает на текущий exe (после переноса установки старый ярлык ведёт в никуда).
+func lnkTargetOK(lnk, exe string) bool {
+	out, err := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`(New-Object -ComObject WScript.Shell).CreateShortcut(`+psQuote(lnk)+`).TargetPath`).Output()
+	if err != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(string(out)), exe)
 }

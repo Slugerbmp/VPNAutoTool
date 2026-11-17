@@ -590,11 +590,48 @@ func closeUIWindows() {
 
 // Значок окна на панели задач — из самого exe (ресурс №1): путь не меняется при обновлениях.
 // (файл значка в папке данных на диске C: — папка программы может быть на другом диске)
+// Значок для панели задач: берём из самого exe (первый значок), а отдельный .ico —
+// только если exe недоступен (например, на сетевом диске).
 func relaunchIcon(exe string) string {
+	if fileExistsW(exe) {
+		return exe + ",0"
+	}
 	if p := filepath.Join(dataDir, "NETtool.ico"); fileExistsW(p) {
 		return p + ",0"
 	}
-	return exe + ",-1"
+	return exe + ",0"
 }
+
+var (
+	pSHGetPropertyStoreFromParsingName = shell32.NewProc("SHGetPropertyStoreFromParsingName")
+	pSHChangeNotify                    = shell32.NewProc("SHChangeNotify")
+)
+
+// lnkSetAUMID прописывает ярлыку тот же AppUserModelID, что и окну. Без этого Windows
+// не связывает окно с ярлыком в «Пуске»: на панели задач пустой значок, а сам ярлык
+// может не показываться в списке приложений.
+func lnkSetAUMID(lnk string) bool {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+	pCoInitializeEx.Call(0, 2)
+	var storeP unsafe.Pointer
+	r, _, _ := pSHGetPropertyStoreFromParsingName.Call(uintptr(unsafe.Pointer(utf16p(lnk))), 0, 2, // GPS_READWRITE
+		uintptr(unsafe.Pointer(&iidPropertyStore)), uintptr(unsafe.Pointer(&storeP)))
+	if r != 0 || storeP == nil {
+		return false
+	}
+	store := uintptr(storeP)
+	vtbl := *(*[8]uintptr)(*(*unsafe.Pointer)(storeP))
+	s := utf16p(appUserModelID)
+	key := propKey{fmtAppUserModel, 5}
+	pv := propVariant{Vt: 31, Ptr: uintptr(unsafe.Pointer(s))}
+	r1, _, _ := syscall.SyscallN(vtbl[6], store, uintptr(unsafe.Pointer(&key)), uintptr(unsafe.Pointer(&pv)))
+	r2, _, _ := syscall.SyscallN(vtbl[7], store)
+	runtime.KeepAlive(s)
+	syscall.SyscallN(vtbl[2], store)
+	return r1 == 0 && r2 == 0
+}
+
+func shellRefresh() { pSHChangeNotify.Call(0x08000000, 0, 0, 0) } // SHCNE_ASSOCCHANGED
 
 func fileExistsW(p string) bool { _, err := os.Stat(p); return err == nil }
