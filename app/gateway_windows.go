@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 	"unsafe"
@@ -188,6 +189,7 @@ func gatewayMain() {
 		}
 	}()
 	// следим за настройками: программа обновляет их каждые пару секунд
+	tick := 0
 	for {
 		time.Sleep(time.Second)
 		nc, err := readGWConfig()
@@ -205,15 +207,25 @@ func gatewayMain() {
 		}
 		g.cfg.Store(nc)
 		writeGWState(g.state(""))
+		if tick++; tick%10 == 0 { // включили WARP/VPN — его адаптеру тоже нужна пересылка
+			gwEnableForwarding(nc.IfIdx)
+		}
 	}
 }
 
 // Включить пересылку на сетевом адаптере и запустить процесс шлюза (выполняется в задаче администратора).
+//
+// Windows пересылает пакет, только если пересылка включена и на входящем адаптере (локальная сеть),
+// и на выходящем — том, куда ведёт маршрут по умолчанию. При включённом WARP (или другом VPN
+// с собственным адаптером) интернет идёт через его адаптер: без пересылки на нём пакеты приставки
+// отбрасывались ещё до перехвата — приставка «подключена», но ничего не открывается.
 func gatewayStartElevated(ifIdx int) error {
-	if ifIdx > 0 {
-		hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			"Set-NetIPInterface -InterfaceIndex "+strconv.Itoa(ifIdx)+" -AddressFamily IPv4 -Forwarding Enabled").Run()
-	}
+	gwEnableForwarding(ifIdx)
+	// входящие соединения приставки к приёмнику шлюза — отдельным правилом брандмауэра,
+	// не полагаясь на правило для программы (его могло не быть, если раздачу не включали)
+	hiddenCmd("netsh", "advfirewall", "firewall", "delete", "rule", "name=NETtool gateway").Run()
+	hiddenCmd("netsh", "advfirewall", "firewall", "add", "rule", "name=NETtool gateway", "dir=in", "action=allow",
+		"protocol=tcp", "localport="+strconv.Itoa(gwTCPPort), "enable=yes", "profile=any").Run()
 	if s := readGWState(); s.PID > 0 && time.Since(time.Unix(s.TS, 0)) < 10*time.Second {
 		return nil // уже работает
 	}
@@ -228,8 +240,44 @@ func gatewayStartElevated(ifIdx int) error {
 }
 
 func gatewayStopElevated(ifIdx int) {
+	ids := []string{}
 	if ifIdx > 0 {
+		ids = append(ids, strconv.Itoa(ifIdx))
+	}
+	fwd := filepath.Join(dataDir, "gateway-fwd.txt")
+	if b, err := os.ReadFile(fwd); err == nil {
+		for _, x := range strings.Split(strings.TrimSpace(string(b)), ",") {
+			if _, err := strconv.Atoi(strings.TrimSpace(x)); err == nil {
+				ids = append(ids, strings.TrimSpace(x))
+			}
+		}
+		os.Remove(fwd)
+	}
+	for _, i := range ids {
 		hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command",
-			"Set-NetIPInterface -InterfaceIndex "+strconv.Itoa(ifIdx)+" -AddressFamily IPv4 -Forwarding Disabled").Run()
+			"Set-NetIPInterface -InterfaceIndex "+i+" -AddressFamily IPv4 -Forwarding Disabled -ErrorAction SilentlyContinue").Run()
 	}
 }
+
+// gwEnableForwarding включает пересылку на адаптере сети и на адаптерах, через которые идёт интернет
+// (в том числе WARP/VPN, появившихся уже после запуска шлюза).
+func gwEnableForwarding(ifIdx int) {
+	if ifIdx > 0 {
+		ps := `$l=@(` + strconv.Itoa(ifIdx) + `); ` +
+			`$l+=@(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/0' -ErrorAction SilentlyContinue | ForEach-Object InterfaceIndex); ` +
+			`$l+=@(Get-NetRoute -AddressFamily IPv4 -DestinationPrefix '0.0.0.0/1' -ErrorAction SilentlyContinue | ForEach-Object InterfaceIndex); ` +
+			`$l+=@(Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'Up' -and $_.InterfaceDescription -match 'Cloudflare|WARP|Wintun|TAP|WireGuard' } | ForEach-Object ifIndex); ` +
+			`$l = $l | Sort-Object -Unique; ` +
+			`foreach($i in $l){ Set-NetIPInterface -InterfaceIndex $i -AddressFamily IPv4 -Forwarding Enabled -ErrorAction SilentlyContinue }; ` +
+			`$l -join ','`
+		out, _ := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Output()
+		list := strings.TrimSpace(string(out))
+		os.WriteFile(filepath.Join(dataDir, "gateway-fwd.txt"), []byte(list), 0644)
+		if list != gwFwdLast {
+			gwFwdLast = list
+			gwLog("пересылка включена на адаптерах: %s", list)
+		}
+	}
+}
+
+var gwFwdLast string
