@@ -1,0 +1,8 @@
+/dist/
+/build/
+/setup/VPNAuto.exe
+/setup/zapret.zip
+/setup/TgWsProxy.exe
+/setup/icon.ico
+*.test
+.DS_Store

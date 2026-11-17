@@ -1,0 +1,303 @@
+//go:build windows
+
+package main
+
+// Установщик VPN Auto: окно с выбором папки и галочками, ярлыки,
+// регистрация в «Установке и удалении программ». Повторный запуск обновляет программу.
+// Права администратора не нужны (если не выбрать системную папку).
+
+import (
+	_ "embed"
+	"encoding/base64"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"syscall"
+	"time"
+	"unicode/utf16"
+	"unsafe"
+)
+
+//go:embed VPNAuto.exe
+var appExe []byte
+
+//go:embed icon.ico
+var appIcon []byte
+
+//go:embed dialog.ps1
+var dialogPS string
+
+//go:embed zapret.zip
+var zapretZip []byte
+
+//go:embed TgWsProxy.exe
+var tgwsExe []byte
+
+const version = "1.10.0"
+const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
+
+var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
+
+func msgBox(text string, flags uintptr) int {
+	t, _ := syscall.UTF16PtrFromString(text)
+	c, _ := syscall.UTF16PtrFromString("Установка VPN Auto")
+	r, _, _ := procMsgBox.Call(0, uintptr(unsafe.Pointer(t)), uintptr(unsafe.Pointer(c)), flags)
+	return int(r)
+}
+
+func hidden(name string, args ...string) *exec.Cmd {
+	c := exec.Command(name, args...)
+	c.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	return c
+}
+
+func psq(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+func encodePS(script string) string {
+	u := utf16.Encode([]rune(script))
+	b := make([]byte, len(u)*2)
+	for i, v := range u {
+		b[2*i], b[2*i+1] = byte(v), byte(v>>8)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+func runPS(script string) ([]byte, error) {
+	return hidden("powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePS(script)).Output()
+}
+
+func existingInstall() string {
+	out, err := hidden("reg", "query", uninstKey, "/v", "InstallLocation").Output()
+	if err != nil {
+		return ""
+	}
+	for _, l := range strings.Split(string(out), "\n") {
+		if i := strings.Index(l, "REG_SZ"); i >= 0 {
+			return strings.TrimSpace(l[i+len("REG_SZ"):])
+		}
+	}
+	return ""
+}
+
+func desktopShortcutExists() bool {
+	out, _ := runPS(`Test-Path -LiteralPath (Join-Path ([Environment]::GetFolderPath('Desktop')) 'VPN Auto.lnk')`)
+	return strings.Contains(string(out), "True")
+}
+
+func main() {
+	defDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "VPN Auto")
+	old := existingInstall()
+	updating := old != ""
+	if updating {
+		defDir = old
+	}
+
+	tmp, _ := os.MkdirTemp("", "vpnauto-setup")
+	defer os.RemoveAll(tmp)
+	tmpIco := filepath.Join(tmp, "icon.ico")
+	os.WriteFile(tmpIco, appIcon, 0644)
+	outFile := filepath.Join(tmp, "choice.txt")
+
+	desk := "1"
+	if updating && !desktopShortcutExists() {
+		desk = "0"
+	}
+	mode, btn := "Автоматический выбор самого быстрого VPN-сервера", "Установить"
+	if updating {
+		mode, btn = "Будет обновлена установленная версия до "+version, "Обновить"
+	}
+
+	zap := "0"
+	if _, err := os.Stat(filepath.Join(defDir, "zapret", "bin", "winws.exe")); err == nil {
+		zap = "1"
+	}
+	warpInstalled := fileExists(filepath.Join(os.Getenv("ProgramFiles"), `Cloudflare\Cloudflare WARP\warp-cli.exe`))
+	warpDef := "0"
+	if warpInstalled {
+		warpDef = "1"
+	}
+	tgDef := "0"
+	if fileExists(filepath.Join(defDir, "tgwsproxy", "TgWsProxy.exe")) {
+		tgDef = "1"
+	}
+	wantTg, wantAuto := false, true
+	dir, wantDesk, wantRun, wantZap, wantWarp := defDir, true, true, zap == "1", false
+	// --silent: автообновление из программы — без окна, с текущими настройками,
+	// без запросов прав администратора (запрет, WARP и TG WS Proxy уже стоят и обновляются сами)
+	silent := len(os.Args) > 1 && os.Args[1] == "--silent"
+	if silent {
+		wantDesk, wantZap, wantWarp, wantTg = desk == "1", false, false, false
+	} else {
+		cmd := exec.Command("powershell", "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encodePS(dialogPS))
+		// только без консоли; HideWindow тут нельзя — Windows спрятала бы и само окно установщика
+		cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: 0x08000000}
+		cmd.Env = append(os.Environ(), "VA_VER="+version, "VA_ICO="+tmpIco, "VA_DIR="+defDir, "VA_DESK="+desk,
+			"VA_OUT="+outFile, "VA_MODE="+mode, "VA_BTN="+btn, "VA_ZAP="+zap, "VA_WARP="+warpDef, "VA_TG="+tgDef)
+		if err := cmd.Run(); err != nil {
+			// окно не открылось — упрощённый вариант
+			if msgBox(btn+" VPN Auto "+version+"?\n\nПапка: "+defDir, 0x4|0x20) != 6 {
+				return
+			}
+		} else {
+			b, err := os.ReadFile(outFile)
+			if err != nil {
+				return // нажали «Отмена» / закрыли окно
+			}
+			lines := strings.Split(strings.ReplaceAll(strings.TrimPrefix(string(b), "\xef\xbb\xbf"), "\r", ""), "\n")
+			if len(lines) < 3 || strings.TrimSpace(lines[0]) == "" {
+				return
+			}
+			dir = filepath.Clean(strings.TrimSpace(lines[0]))
+			wantDesk = strings.TrimSpace(lines[1]) == "1"
+			wantRun = strings.TrimSpace(lines[2]) == "1"
+			wantZap = len(lines) > 3 && strings.TrimSpace(lines[3]) == "1"
+			wantWarp = len(lines) > 4 && strings.TrimSpace(lines[4]) == "1"
+			wantTg = len(lines) > 5 && strings.TrimSpace(lines[5]) == "1"
+			wantAuto = len(lines) > 6 && strings.TrimSpace(lines[6]) == "1"
+			if wantWarp {
+				wantZap = true
+			}
+		}
+	}
+	if !strings.EqualFold(filepath.Base(dir), "VPN Auto") {
+		dir = filepath.Join(dir, "VPN Auto") // своя отдельная папка — чтобы удаление ничего лишнего не задело
+	}
+	exe := filepath.Join(dir, "VPNAuto.exe")
+	ico := filepath.Join(dir, "icon-"+strings.ReplaceAll(version, ".", "")+".ico") // новое имя — мимо кэша значков Windows
+
+	// закрываем запущенную программу, чтобы заменить файл
+	dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+	// процесс шлюза запущен с правами администратора и taskkill его не закроет —
+	// просим его завершиться самого (он следит за этим файлом каждую секунду)
+	os.WriteFile(filepath.Join(dd, "gateway.json"), []byte(`{"on":false,"ts":0}`), 0644)
+	hidden("taskkill", "/F", "/IM", "VPNAuto.exe").Run()
+	hidden("taskkill", "/F", "/IM", "vpnauto-core.exe").Run()
+	time.Sleep(1500 * time.Millisecond)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		fail(dir, err)
+		return
+	}
+	var err error
+	for i := 0; i < 6; i++ {
+		if err = os.WriteFile(exe, appExe, 0755); err == nil {
+			break
+		}
+		// файл занят запущенной копией: запущенный exe нельзя перезаписать, но можно переименовать
+		if i >= 1 {
+			old := filepath.Join(dir, fmt.Sprintf("VPNAuto.old-%d.exe", time.Now().UnixNano()))
+			if os.Rename(exe, old) == nil {
+				hidden("cmd", "/c", "ping -n 30 127.0.0.1 >nul & del /f /q \""+old+"\"").Start() // убрать позже
+				continue
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	if err != nil {
+		fail(dir, err)
+		return
+	}
+	if olds, _ := filepath.Glob(filepath.Join(dir, "icon*.ico")); len(olds) > 0 {
+		for _, o := range olds {
+			if o != ico {
+				os.Remove(o)
+			}
+		}
+	}
+	os.WriteFile(ico, appIcon, 0644)
+
+	// старая копия в другой папке больше не нужна
+	if updating && !strings.EqualFold(filepath.Clean(old), filepath.Clean(dir)) {
+		os.Remove(filepath.Join(old, "VPNAuto.exe"))
+		os.Remove(filepath.Join(old, "icon.ico"))
+		os.Remove(old)
+	}
+
+	deskPS := `$d=[Environment]::GetFolderPath('Desktop'); Remove-Item -LiteralPath (Join-Path $d 'VPN Auto.lnk') -ErrorAction SilentlyContinue;`
+	if wantDesk {
+		deskPS = `$d=[Environment]::GetFolderPath('Desktop'); mk (Join-Path $d 'VPN Auto.lnk');`
+	}
+	ps := fmt.Sprintf(`$w=New-Object -ComObject WScript.Shell;`+
+		`function mk($p){$s=$w.CreateShortcut($p);$s.TargetPath=%s;$s.WorkingDirectory=%s;$s.IconLocation=%s;`+
+		`$s.Description='VPN Auto by undr — автоматический выбор быстрого сервера';$s.Save()};`+
+		`mk (Join-Path ([Environment]::GetFolderPath('Programs')) 'VPN Auto.lnk');`+deskPS,
+		psq(exe), psq(dir), psq(ico+",0"))
+	runPS(ps)
+
+	for _, kv := range [][3]string{
+		{"DisplayName", "REG_SZ", "VPN Auto"},
+		{"DisplayVersion", "REG_SZ", version},
+		{"Publisher", "REG_SZ", "undr"},
+		{"DisplayIcon", "REG_SZ", ico},
+		{"InstallLocation", "REG_SZ", dir},
+		{"UninstallString", "REG_SZ", `"` + exe + `" --uninstall`},
+		{"NoModify", "REG_DWORD", "1"},
+		{"NoRepair", "REG_DWORD", "1"},
+	} {
+		hidden("reg", "add", uninstKey, "/v", kv[0], "/t", kv[1], "/d", kv[2], "/f").Run()
+	}
+
+	hidden("ie4uinit.exe", "-show").Run() // обновить кэш значков (ярлыки, панель задач)
+
+	if wantZap {
+		// распаковка запрета и задача для запуска без UAC — один запрос прав администратора
+		zf := filepath.Join(tmp, "zapret.zip")
+		os.WriteFile(zf, zapretZip, 0644)
+		ps := fmt.Sprintf(`Start-Process -FilePath %s -ArgumentList '--zapret-setup',%s -Verb RunAs -Wait`, psq(exe), psq(`"`+zf+`"`))
+		if _, err := runPS(ps); err != nil || !fileExists(filepath.Join(dir, "zapret", "bin", "winws.exe")) {
+			msgBox("Запрет не установлен: не было разрешения администратора.\nЕго можно будет установить позже прямо из программы (режим «Запрет»).", 0x30)
+		}
+	}
+
+	if wantWarp && !warpInstalled && fileExists(filepath.Join(dir, "zapret", "bin", "winws.exe")) {
+		// WARP скачает и поставит сама программа (через задачу запрета, без лишних запросов UAC)
+		dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+		os.MkdirAll(dd, 0755)
+		os.WriteFile(filepath.Join(dd, "pending-warp-install"), []byte("1"), 0644)
+	}
+
+	if wantTg {
+		// вшитый TG WS Proxy; программа включит его при старте и будет обновлять
+		td := filepath.Join(dir, "tgwsproxy")
+		os.MkdirAll(td, 0755)
+		if !fileExists(filepath.Join(td, "TgWsProxy.exe")) {
+			if os.WriteFile(filepath.Join(td, "TgWsProxy.exe"), tgwsExe, 0755) == nil {
+				os.WriteFile(filepath.Join(td, "version.txt"), []byte("embedded"), 0644)
+			}
+		}
+		dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+		os.MkdirAll(dd, 0755)
+		os.WriteFile(filepath.Join(dd, "pending-tgws-install"), []byte("1"), 0644)
+	}
+
+	if !silent { // при обновлении автозапуск не трогаем
+		dd := filepath.Join(os.Getenv("LOCALAPPDATA"), "VPNAuto")
+		os.MkdirAll(dd, 0755)
+		v := "0"
+		if wantAuto {
+			v = "1"
+		}
+		os.WriteFile(filepath.Join(dd, "pending-autostart"), []byte(v), 0644)
+	}
+
+	if wantRun {
+		c := exec.Command(exe)
+		c.Dir = dir
+		c.Start()
+	} else {
+		word := "установлен"
+		if updating {
+			word = "обновлён"
+		}
+		msgBox("Готово! VPN Auto "+word+".", 0x40)
+	}
+}
+
+func fail(dir string, err error) {
+	msgBox("Не удалось установить в папку:\n"+dir+"\n\n"+err.Error()+
+		"\n\nВыберите другую папку (например, в своей папке пользователя) или запустите установщик от имени администратора.", 0x10)
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }

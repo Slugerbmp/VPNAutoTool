@@ -1,0 +1,19 @@
+package main
+
+import "testing"
+
+func TestKinds(t *testing.T) {
+	links := "vless://u@de.example.com:443?security=tls#🇩🇪 Германия\n" +
+		"vless://u@gb.example.com:443?security=tls#🇬🇧 GB London\n" +
+		"vless://u@t.example.com:443?security=tls#🇳🇱 Torrent / Торренты\n" +
+		"vless://u@0.0.0.0:1?security=tls#📅 Истекает 01.12.2026\n" +
+		"vless://u@i.example.com:443?security=tls#Осталось: 45 ГБ\n" +
+		"vless://u@f.example.com:443?security=tls#🇫🇮 Финляндия²\n"
+	s := parseBody(links)
+	want := []string{"", "", "special", "info", "info", ""}
+	for i, x := range s {
+		if x.Kind != want[i] {
+			t.Errorf("%q: got %q want %q", x.Name, x.Kind, want[i])
+		}
+	}
+}

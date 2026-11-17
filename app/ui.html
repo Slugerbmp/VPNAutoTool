@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>VPN Auto</title>
+<link rel="icon" type="image/png" href="/favicon.png?v=1100">
+<meta name="theme-color" id="themeColor" content="#0a0a0a">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root{
+    --bg:#0a0a0a; --fg:#f2f2f2; --mut:#8c8c8c; --dim:#4d4d4d; --line:#262626; --raise:#141414;
+    --mono:"Cascadia Mono","Consolas","SF Mono",ui-monospace,monospace;
+    --sans:"Segoe UI Variable Display","Segoe UI","Inter",system-ui,sans-serif;
+  }
+  [data-theme=light]{--bg:#fafafa;--fg:#0a0a0a;--mut:#6b6b6b;--dim:#b3b3b3;--line:#e0e0e0;--raise:#f0f0f0}
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html{scrollbar-width:none}
+  ::-webkit-scrollbar{width:0;height:0;display:none}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font:13px/1.5 var(--sans);user-select:none;-webkit-font-smoothing:antialiased}
+  body{padding:18px 20px 14px;display:flex;flex-direction:column;min-height:100vh}
+  button{font:inherit;color:inherit}
+  b{font-weight:600}
+  .mut{color:var(--mut)} .err{color:var(--fg)} .err::before{content:"× "} .ok{color:var(--fg)}
+
+  /* шапка */
+  header{display:flex;align-items:baseline;gap:10px;padding-bottom:14px;border-bottom:1.5px solid var(--fg)}
+  header img{display:none}
+  header .t{font:700 11px/1 var(--sans);letter-spacing:.32em;text-transform:uppercase}
+  .pill{margin-left:auto;font:500 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+  .pill i{display:none}
+  .pill.on{color:var(--fg)} .pill.on::before{content:"■ "} .pill.fb{color:var(--fg)} .pill.fb::before{content:"□ "}
+
+  /* главная плашка включения */
+  .hero{display:flex;flex-direction:column;align-items:stretch;gap:10px;padding:18px 0 16px}
+  #pw{all:unset;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:0 18px;height:76px;border:1.5px solid var(--fg);transition:background .15s,color .15s}
+  #pw svg{display:none}
+  #pwText{font:700 26px/1 var(--sans);letter-spacing:-.01em;text-transform:uppercase}
+  #pw .hint{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+  #pw:hover:not(:disabled){background:var(--raise)}
+  #pw.on{background:var(--fg);color:var(--bg)} #pw.on .hint{color:var(--bg);opacity:.6}
+  #pw.busy #pwText{opacity:.45}
+  #pw:disabled{cursor:default;opacity:.45}
+  #curText{font:12px/1.4 var(--mono);color:var(--mut);display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-height:17px}
+  #spark{width:100%;height:22px;display:block;color:var(--fg)}
+  .seg{display:flex;gap:18px;border-bottom:1px solid var(--line)}
+  .seg button{all:unset;cursor:pointer;font:600 11px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase;color:var(--mut);padding:8px 0 9px;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .seg button.act{color:var(--fg);border-bottom-color:var(--fg)}
+  .seg button:disabled{cursor:default}
+
+  /* разделы */
+  .sec{border-top:1px solid var(--line)}
+  .sec:first-child{border-top:none}
+  .sh{display:flex;align-items:center;gap:12px;padding:12px 0;cursor:pointer}
+  .sh .chev{display:none}
+  .sh::before{content:"+";font:400 15px/1 var(--mono);width:12px;color:var(--mut)}
+  .sec.open .sh::before{content:"−";color:var(--fg)}
+  .sh.static::before{content:"";}
+  .sh .tt{font:600 11px/1 var(--sans);letter-spacing:.2em;text-transform:uppercase}
+  .sh .sum{margin-left:auto;font:11.5px/1.3 var(--mono);color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;display:flex;gap:6px;align-items:center}
+  .sb{display:none;padding:0 0 14px 24px}
+  .sec.open .sb{display:block}
+  .sh.static{cursor:default}
+
+  /* серверы — как таблица */
+  .srv{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);cursor:pointer;position:relative}
+  .srv:hover .n{text-decoration:underline;text-underline-offset:3px}
+  .srv.cur::before{content:"";position:absolute;left:-14px;top:9px;bottom:9px;width:3px;background:var(--fg)}
+  .srv.cur .n{font-weight:600}
+  .srv .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srv .why{display:block;color:var(--mut);font:11px/1.35 var(--mono);white-space:normal;font-weight:400}
+  .cc{font:500 10px/1 var(--mono);letter-spacing:.06em;color:var(--mut);border:1px solid var(--dim);padding:2px 3px;min-width:24px;text-align:center;flex:none;display:inline-block}
+  .n .cc{margin-right:8px}
+  .srv.cur .cc{color:var(--fg);border-color:var(--fg)}
+  .pg{font:12px/1 var(--mono);flex:none;min-width:58px;text-align:right}
+  .pg.y{color:var(--mut)} .pg.r{color:var(--mut)} .pg.d{color:var(--mut);text-decoration:line-through}
+  .pg.mut{min-width:0}
+  .pin{font:10px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;flex:none}
+  .tag{font:10px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mut);border:1px dashed var(--dim);padding:2px 5px;flex:none}
+  .stab{font:11px/1 var(--mono);color:var(--mut);flex:none}
+  .stab.low{color:var(--fg)} .stab.low::before{content:"~"}
+  .sub{font:11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mut);padding:10px 0 4px;cursor:pointer}
+  .sub:hover{color:var(--fg)}
+
+  /* элементы */
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .grow{flex:1}
+  .line{display:flex;align-items:center;gap:12px;padding:8px 0}
+  .lnk{all:unset;cursor:pointer;font:11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--fg);border-bottom:1px solid var(--dim);padding-bottom:2px}
+  .lnk:hover{border-color:var(--fg)}
+  .lnk:disabled{color:var(--mut);cursor:default}
+  .btn{all:unset;cursor:pointer;font:600 10.5px/1 var(--sans);letter-spacing:.16em;text-transform:uppercase;border:1.5px solid var(--fg);padding:9px 14px}
+  .btn:hover:not(:disabled){background:var(--fg);color:var(--bg)}
+  .btn.pri{background:var(--fg);color:var(--bg)}
+  .btn.pri:hover{opacity:.85}
+  .btn.stop{background:var(--fg);color:var(--bg)}
+  .btn:disabled{opacity:.35;cursor:default}
+  textarea,select,input[type=text],input[type=time]{background:transparent;color:var(--fg);border:none;border-bottom:1px solid var(--dim);border-radius:0;font:12px var(--mono);padding:7px 0;user-select:text}
+  textarea{width:100%;height:64px;resize:none;margin:6px 0 10px;border:1px solid var(--dim);padding:8px}
+  select{width:100%;margin:8px 0;appearance:none;-webkit-appearance:none;background:linear-gradient(45deg,transparent 50%,var(--fg) 50%) calc(100% - 9px) 52%/5px 5px no-repeat,linear-gradient(-45deg,transparent 50%,var(--fg) 50%) calc(100% - 4px) 52%/5px 5px no-repeat;padding-right:20px;cursor:pointer}
+  select option{background:var(--bg);color:var(--fg)}
+  input[type=text]{width:100%;margin-top:6px}
+  textarea:focus,select:focus,input:focus{outline:none;border-color:var(--fg)}
+  .note{color:var(--mut);font-size:12px;margin-top:6px}
+  .bar{height:2px;background:var(--line);overflow:hidden;margin:8px 0 2px}
+  .bar i{display:block;height:100%;background:var(--fg);transition:width .3s}
+  .box{border:1px solid var(--line);padding:10px 12px;font:12px/1.75 var(--mono);user-select:text;margin-top:10px}
+  .box b{font-weight:700;color:var(--fg)}
+  pre{margin:6px 0;border:1px solid var(--line);padding:8px;font:10.5px/1.45 var(--mono);color:var(--mut);white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto;user-select:text}
+  details summary{cursor:pointer;color:var(--mut);font:11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase;padding:6px 0;list-style:none}
+  details summary::before{content:"+ "} details[open] summary::before{content:"− "}
+  details textarea{height:84px}
+
+  /* квадратный переключатель */
+  .sw{position:relative;width:32px;height:16px;flex:none;cursor:pointer;border:1.5px solid var(--fg)}
+  .sw input{opacity:0;width:0;height:0;position:absolute}
+  .sw span{position:absolute;inset:0;transition:.15s}
+  .sw span:before{content:"";position:absolute;width:9px;height:9px;left:2px;top:2px;background:var(--fg);transition:.15s}
+  .sw input:checked+span{background:var(--fg)}
+  .sw input:checked+span:before{transform:translateX(16px);background:var(--bg)}
+  .sw input:disabled+span{opacity:.35;cursor:default}
+
+  .qrs{display:flex;gap:14px;margin-top:12px;flex-wrap:wrap}
+  .qrs figure{margin:0;font:10px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+  .qrs img{width:116px;height:116px;background:#fff;display:block;margin-bottom:6px;padding:4px;border:1px solid var(--line)}
+  .prof{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);cursor:pointer}
+  .prof .dot{width:10px;height:10px;border:1.5px solid var(--fg);flex:none}
+  .prof.act .dot{background:var(--fg)}
+  .prof.act{font-weight:600}
+  .prof .x{all:unset;cursor:pointer;color:var(--mut);font:14px/1 var(--mono);padding:0 2px}
+  .prof .x:hover{color:var(--fg)}
+  .grid2{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center;margin-top:8px}
+  .grid2 select{margin:0}
+
+  body.mini{padding:14px 16px 10px} body.mini #secs{display:none} body.mini .hero{padding:14px 0 10px} body.mini #pw{height:60px} body.mini #pwText{font-size:20px}
+  #miniPane{display:none} body.mini #miniPane{display:block;border-top:1px solid var(--line)}
+
+  footer{margin-top:auto;padding-top:14px;font:11px/1.45 var(--mono);display:flex;align-items:flex-end;gap:12px;border-top:1px solid var(--line)}
+  #msg{flex:1;color:var(--mut);min-height:16px}
+  #msg .ev{color:var(--fg)}
+  #quit{color:var(--mut);border-color:transparent}
+
+  /* собственная рамка окна (Windows) */
+  #tb{display:none;position:fixed;top:0;left:0;right:0;height:30px;z-index:50;background:var(--bg);border-bottom:1px solid var(--line);align-items:stretch;cursor:default}
+  html.cf #tb{display:flex} html.cf body{padding-top:48px} html.cf body.mini{padding-top:44px}
+  html.cf{border:1px solid var(--line);min-height:100vh}
+  #tb .d{flex:1;display:flex;align-items:center;padding-left:12px;font:600 10px/1 var(--sans);letter-spacing:.32em;text-transform:uppercase;color:var(--mut)}
+  #tb button{all:unset;width:44px;display:flex;align-items:center;justify-content:center;font:400 14px/1 var(--mono);color:var(--mut)}
+  #tb button:hover{background:var(--raise);color:var(--fg)} #tb #tbX:hover{background:var(--fg);color:var(--bg)}
+  #grip{display:none;position:fixed;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:50;
+    background:linear-gradient(135deg,transparent 50%,var(--dim) 50%,var(--dim) 58%,transparent 58%,transparent 70%,var(--dim) 70%,var(--dim) 78%,transparent 78%)}
+  html.cf #grip{display:block}
+</style>
+</head>
+<body>
+  <div id="tb"><div class="d" id="tbD">VPN Auto</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
+  <div id="grip"></div>
+  <header>
+    <img src="/favicon.png?v=1100" alt="">
+    <span class="t">VPN Auto</span>
+    <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
+  </header>
+
+  <section class="hero">
+    <div class="seg" id="seg" hidden>
+      <button data-m="vpn">VPN</button>
+      <button data-m="zapret">Запрет</button>
+    </div>
+    <button id="pw" title="Включить / выключить"><span id="pwText">Выключено</span><span class="hint" id="pwHint">нажмите</span></button>
+    <div id="curText"></div>
+    <svg id="spark" viewBox="0 0 170 26" preserveAspectRatio="none" hidden></svg>
+  </section>
+
+  <div id="secs">
+    <!-- VPN -->
+    <section class="sec" data-k="srv" data-mode="vpn">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Серверы</span><span class="sum" id="srvSum"></span></div>
+      <div class="sb">
+        <div id="list"></div>
+        <div class="line"><span class="grow mut">Российские сайты без VPN</span><label class="sw"><input type="checkbox" id="ru"><span></span></label></div>
+        <div class="row"><button class="lnk" id="refresh">Обновить подписку</button><span class="grow"></span><button class="lnk" id="speedBtn">Тест скорости</button></div>
+      </div>
+    </section>
+    <section class="sec" data-k="key" data-mode="vpn">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Подписки</span><span class="sum" id="keySum"></span></div>
+      <div class="sb">
+        <div id="profList"></div>
+        <div id="addForm" hidden>
+          <input type="text" id="profName" placeholder="Название (необязательно)">
+          <textarea id="keyIn" spellcheck="false" placeholder="Ссылка на подписку https://… или ключ vless:// vmess:// trojan:// ss://"></textarea>
+          <div class="row"><button class="btn pri" id="saveKey">Добавить</button><button class="lnk" id="cancelAdd">Отмена</button><span class="note" id="keyNote" style="margin:0"></span></div>
+        </div>
+        <button class="lnk" id="addProf" style="margin-top:6px">+ Добавить подписку</button>
+      </div>
+    </section>
+
+    <!-- Запрет -->
+    <section class="sec" data-k="zap" data-mode="zapret">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Запрет</span><span class="sum" id="zSum"></span></div>
+      <div class="sb">
+        <div id="zStatus"></div>
+        <div class="bar" id="zBar" hidden><i id="zBarI"></i></div>
+        <select id="zSel" title="Стратегия обхода"></select>
+        <div class="row"><button class="btn" id="zTest">Подобрать лучшую</button><span class="grow"></span><button class="lnk" id="zUpd">Обновления</button></div>
+        <div class="note" id="zVer"></div>
+        <details style="margin-top:8px"><summary>Свои сайты для запрета (<span id="zxCount">0</span>)</summary>
+          <div class="note" style="margin:6px 0 0">Если сайт не открывается с запретом — впишите его домен (по одному в строке). Сайт, заблокированный по IP, запрет не откроет — тогда нужен VPN или WARP.</div>
+          <textarea id="zxIn" spellcheck="false" placeholder="например: kino.watch"></textarea>
+          <div class="row"><button class="btn" id="zxSave">Сохранить</button><span class="note" id="zxOk" style="margin:0"></span></div>
+        </details>
+      </div>
+    </section>
+    <section class="sec" data-k="warp" data-mode="zapret">
+      <div class="sh static"><span class="chev"></span><span class="tt">WARP</span><span class="sum" id="warpSum"></span><label class="sw warp"><input type="checkbox" id="warp"><span></span></label></div>
+      <div class="note err" id="warpNote" hidden style="margin:-4px 2px 10px"></div>
+    </section>
+
+    <!-- общие -->
+    <section class="sec" data-k="tg" id="tgSec" hidden>
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">TG WS Proxy</span><span class="sum" id="tgSum"></span><label class="sw"><input type="checkbox" id="tg"><span></span></label></div>
+      <div class="sb">
+        <div class="note" style="margin:0 0 8px">Ускоряет Telegram Desktop: его трафик идёт через WebSocket. Нужно один раз подключить Telegram к прокси.</div>
+        <div class="row"><button class="btn" id="tgLink">Подключить Telegram</button><span class="note" id="tgNote" style="margin:0"></span></div>
+      </div>
+    </section>
+    <section class="sec" data-k="hs" id="hsSec" hidden>
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Раздать доступ</span><span class="sum" id="hsSum"></span><label class="sw"><input type="checkbox" id="hs"><span></span></label></div>
+      <div class="sb">
+        <div class="line" style="padding-top:0"><span class="grow mut">В локальную сеть (провод / роутер) вместо Wi-Fi точки</span><label class="sw"><input type="checkbox" id="hsLan"><span></span></label></div>
+        <div class="line"><span class="grow mut">Приставки и ТВ без прокси (Xbox, PlayStation)</span><label class="sw"><input type="checkbox" id="hsCons"><span></span></label></div>
+        <div class="line" id="gwRow"><span class="grow mut">Режим шлюза: весь трафик приставки через ПК (Discord, голос, всё)</span><label class="sw"><input type="checkbox" id="hsGw"><span></span></label></div>
+        <div class="line" id="gwGamesRow"><span class="grow mut">Игры тоже через VPN (выше пинг; обычно не нужно)</span><label class="sw"><input type="checkbox" id="hsGwGames"><span></span></label></div>
+        <div id="hsText" class="note" style="margin:0"></div>
+        <div class="box" id="hsBox" hidden></div>
+      </div>
+    </section>
+    <section class="sec" data-k="rules">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Правила</span><span class="sum" id="rulesSum"></span></div>
+      <div class="sb">
+        <div class="line" style="padding-top:0"><span class="grow">Режим по сети</span><label class="sw"><input type="checkbox" id="rNet"><span></span></label></div>
+        <div class="note" style="margin:0">Домашние сети — по одной в строке. Сейчас: <b id="rCur" style="color:var(--fg)">…</b> <button class="lnk" id="rAddCur">добавить</button></div>
+        <textarea id="rHome" spellcheck="false" style="height:52px"></textarea>
+        <div class="grid2">
+          <span class="mut">Дома</span><select id="rHomeMode"></select>
+          <span class="mut">В других сетях</span><select id="rOtherMode"></select>
+        </div>
+        <div class="line"><span class="grow">Расписание</span><label class="sw"><input type="checkbox" id="rSched"><span></span></label></div>
+        <div class="row"><span class="mut">включать в</span><input type="time" id="rOn"><span class="mut">выключать в</span><input type="time" id="rOff"></div>
+        <div class="row" style="margin-top:10px"><button class="btn" id="rSave">Сохранить</button><span class="note" id="rOk" style="margin:0"></span></div>
+      </div>
+    </section>
+    <section class="sec" data-k="set">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Настройки</span><span class="sum"></span></div>
+      <div class="sb">
+        <div class="line" style="padding-top:0"><span class="grow">Запускать вместе с системой<span class="note" style="display:block;margin:0">и сразу включать запрет (без WARP)</span></span><label class="sw"><input type="checkbox" id="oAuto"><span></span></label></div>
+        <div class="line"><span class="grow">Обновляться автоматически<span class="note" style="display:block;margin:0" id="updNote"></span></span><label class="sw"><input type="checkbox" id="oUpd"><span></span></label></div>
+        <div class="row"><button class="btn" id="updCheck">Проверить обновления</button><button class="btn" id="updGo" hidden>Обновить</button></div>
+        <div class="line" id="oFbRow"><span class="grow">Резерв: запрет, если VPN упал<span class="note" style="display:block;margin:0">вернусь на VPN, когда он оживёт</span></span><label class="sw"><input type="checkbox" id="oFb"><span></span></label></div>
+        <div class="line"><span class="grow">Уведомления</span><label class="sw"><input type="checkbox" id="oNotify"><span></span></label></div>
+        <div class="line" id="oHkRow"><span class="grow">Горячая клавиша <b style="font-weight:500">Ctrl+Alt+V</b></span><label class="sw"><input type="checkbox" id="oHk"><span></span></label></div>
+        <div class="grid2">
+          <span class="mut">Автовыбор сервера</span><select id="oBy"><option value="ping">по пингу</option><option value="speed">по скорости (после теста)</option></select>
+          <span class="mut">Тема</span><select id="oTheme"><option value="">как в системе</option><option value="dark">тёмная</option><option value="light">светлая</option></select>
+        </div>
+      </div>
+    </section>
+    <section class="sec" data-k="bp">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Исключения</span><span class="sum" id="bpSum"></span></div>
+      <div class="sb">
+        <div class="note" style="margin:0">Сайты, для которых программа ничего не меняет — по одному домену в строке.</div>
+        <textarea id="bpIn" spellcheck="false"></textarea>
+        <div class="row"><button class="btn" id="bpSave">Сохранить</button><span class="note" id="bpOk" style="margin:0"></span></div>
+      </div>
+    </section>
+    <section class="sec" data-k="diag">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Диагностика</span><span class="sum">журналы</span></div>
+      <div class="sb">
+        <div class="note" style="margin:0">Ядро VPN</div><pre id="logCore">…</pre>
+        <div class="note">Программа</div><pre id="logApp">…</pre>
+        <div class="note" id="logZt" hidden>Запрет</div><pre id="logZap" hidden></pre>
+        <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div id="miniPane">
+    <div class="line" id="mWarpRow"><span class="grow">WARP</span><label class="sw warp"><input type="checkbox" id="mWarp"><span></span></label></div>
+    <div class="line" id="mTgRow"><span class="grow">TG WS Proxy</span><label class="sw"><input type="checkbox" id="mTg"><span></span></label></div>
+    <div class="line" id="mHsRow"><span class="grow">Раздать доступ</span><label class="sw"><input type="checkbox" id="mHs"><span></span></label></div>
+    <div class="row" style="padding:6px 0"><button class="lnk" id="mFull">Открыть полностью</button></div>
+  </div>
+
+  <footer><div id="msg"></div><button class="lnk" id="quit">Выйти</button></footer>
+
+<script>
+const $ = id => document.getElementById(id);
+let st = null, busyPower = false;
+const MINI = new URLSearchParams(location.search).has('mini');
+if (MINI) {
+  document.body.classList.add('mini'); document.title = 'VPN Auto · мини';
+  try { window.resizeTo(340, 470); window.moveTo(screen.availLeft + screen.availWidth - 350, screen.availTop + screen.availHeight - 480); } catch {}
+}
+const darkQ = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme(){ const t = (st && st.opts && st.opts.theme) || ''; const th = t || (darkQ.matches ? 'dark' : 'light'); document.documentElement.dataset.theme = th; $('themeColor').content = th === 'light' ? '#fafafa' : '#0a0a0a'; frameSync(th === 'dark'); }
+
+// ---- рамка окна ----
+let frameDark = null, frameTries = 0, cornerDone = false;
+const winQ = (q) => fetch('/api/win?t=' + encodeURIComponent(document.title) + '&' + q).then(r => r.json()).catch(() => ({}));
+function frameSync(dark){
+  if (dark !== undefined) frameDark = dark;
+  winQ('dark=' + (frameDark ? 1 : 0)).then(j => {
+    frameTries++;
+    document.documentElement.classList.toggle('cf', !!j.custom);
+    if (j.custom && MINI && !cornerDone) { cornerDone = true; winQ('do=corner'); }
+    if (!j.custom && frameTries < 30) setTimeout(frameSync, 400);
+  });
+}
+function dragOn(elm, kind){
+  elm.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('button')) return;
+    e.preventDefault(); elm.setPointerCapture(e.pointerId);
+    const x0 = e.screenX, y0 = e.screenY, k = devicePixelRatio || 1;
+    let busy = true, pend = null;
+    const send = () => { if (busy || !pend) return; busy = true; const p = pend; pend = null;
+      winQ('do=' + kind + '&dx=' + p[0] + '&dy=' + p[1]).finally(() => { busy = false; send(); }); };
+    winQ('do=start').finally(() => { busy = false; send(); });
+    const mv = ev => { pend = [Math.round((ev.screenX - x0) * k), Math.round((ev.screenY - y0) * k)]; send(); };
+    const up = () => { elm.removeEventListener('pointermove', mv); elm.removeEventListener('pointerup', up); elm.removeEventListener('pointercancel', up); };
+    elm.addEventListener('pointermove', mv); elm.addEventListener('pointerup', up); elm.addEventListener('pointercancel', up);
+  });
+}
+dragOn($('tb'), 'move'); dragOn($('grip'), 'size');
+$('tbMin').onclick = () => winQ('do=min');
+$('tbX').onclick = () => winQ('do=close');
+darkQ.addEventListener('change', applyTheme);
+const MODES = [['keep','не менять'],['vpn','VPN'],['zapret','запрет'],['off','выключить']];
+['rHomeMode','rOtherMode'].forEach(id => MODES.forEach(([v,t]) => { const o = el('option','',t); o.value = v; $(id).append(o); }));
+
+async function api(p, body){
+  const r = await fetch('/api/' + p, body === undefined ? {} :
+    {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  try { return await r.json(); } catch { return {}; }
+}
+function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+
+// ---- раскрытие разделов (запоминается) ----
+let opened = {srv: true, zap: true};
+try { opened = Object.assign(opened, JSON.parse(localStorage.getItem('va.open') || '{}')); } catch {}
+document.querySelectorAll('.sec').forEach(s => {
+  const k = s.dataset.k;
+  s.classList.toggle('open', !!opened[k]);
+  const h = s.querySelector('.sh');
+  if (h.classList.contains('static')) return;
+  h.onclick = e => {
+    if (e.target.closest('.sw')) return;
+    s.classList.toggle('open');
+    opened[k] = s.classList.contains('open');
+    try { localStorage.setItem('va.open', JSON.stringify(opened)); } catch {}
+    if (k === 'diag' && opened[k]) loadLogs();
+  };
+});
+document.querySelectorAll('.sw').forEach(sw => sw.addEventListener('click', e => e.stopPropagation()));
+
+// ---- имя сервера: флаг-эмодзи → код страны, лишние значки убираем ----
+function parseName(name){
+  const cps = Array.from(name || '');
+  let cc = '', rest = [];
+  for (let i = 0; i < cps.length; i++) {
+    const c = cps[i].codePointAt(0);
+    if (c >= 0x1F1E6 && c <= 0x1F1FF && i + 1 < cps.length) {
+      const d = cps[i + 1].codePointAt(0);
+      if (d >= 0x1F1E6 && d <= 0x1F1FF) { if (!cc) cc = String.fromCharCode(c - 0x1F1E6 + 65, d - 0x1F1E6 + 65); i++; continue; }
+    }
+    rest.push(cps[i]);
+  }
+  let text = rest.join('').replace(/[\p{Extended_Pictographic}️‍]/gu, '').replace(/\s+/g, ' ').trim();
+  return {cc, text: text || name};
+}
+function pingTxt(p){
+  if (p === 0) return ['…', ''];
+  if (p < 0) return ['нет связи', 'd'];
+  return [p + ' мс', p < 150 ? 'g' : p < 350 ? 'y' : 'r'];
+}
+function nameNode(name){
+  const n = parseName(name), f = document.createDocumentFragment();
+  if (n.cc) f.append(el('span', 'cc', n.cc));
+  f.append(n.text);
+  return f;
+}
+
+let deadOpen = false, infoOpen = false;
+function renderServers(){
+  const list = $('list'); list.textContent = '';
+  const S = st.servers || [];
+  if (!S.length) { list.append(el('div', 'note', st.busy ? 'Загружаю…' : st.configured ? 'Нет серверов' : 'Вставьте ключ в разделе «Ключ»')); return; }
+  const idx = S.map((s, i) => i);
+  const SP = st.speeds || {}, bySpeed = st.opts && st.opts.autoBy === 'speed' && Object.keys(SP).length;
+  const rank = i => { const s = S[i], stab = s.stab >= 0 ? s.stab : 100; return (s.ping || 1e9) * (1 + (100 - stab) / 100 * 3) + (100 - stab) * 6; };
+  const main = idx.filter(i => S[i].kind !== 'info');
+  const alive = main.filter(i => S[i].ping >= 0).sort((a, b) =>
+    (S[a].kind === 'special') - (S[b].kind === 'special') ||
+    (bySpeed ? ((SP[S[b].name] || 0) - (SP[S[a].name] || 0)) : (rank(a) - rank(b))));
+  const dead = main.filter(i => S[i].ping < 0);
+  const info = idx.filter(i => S[i].kind === 'info');
+
+  const auto = el('div', 'srv' + (!st.pinned ? ' cur' : ''));
+  auto.append(el('span', 'cc', 'AUTO'), el('span', 'n', 'Самый стабильный'));
+  auto.onclick = () => api('select', {name: ''}).then(tick);
+  list.append(auto);
+
+  const row = (i) => {
+    const s = S[i], r = el('div', 'srv' + (i === st.cur ? ' cur' : ''));
+    const [t, c] = pingTxt(s.ping);
+    const n = el('span', 'n'); n.append(nameNode(s.name));
+    if (s.ping < 0 && s.err) n.append(el('span', 'why', s.err));
+    if (s.ping >= 0 && !n.querySelector('.cc')) n.prepend(el('span', 'cc', '—'));
+    r.append(n);
+    if (s.kind === 'special') { const tg = el('span', 'tag', 'только вручную'); tg.title = 'Специальный сервер (например, для торрентов) — автовыбор его не использует'; r.append(tg); }
+    if (st.pinned === s.name) r.append(el('span', 'pin', 'выбран'));
+    if (s.ping >= 0 && s.stab >= 0 && s.kind !== 'info') { const sb = el('span', 'stab' + (s.stab < 90 ? ' low' : ''), s.stab + '%'); sb.title = 'Стабильность: доля успешных проверок за последние ~5 минут'; r.append(sb); }
+    const sp = (st.speeds || {})[s.name];
+    if (sp > 0) r.append(el('span', 'pg mut', sp.toFixed(0) + ' Мбит/с'));
+    r.append(el('span', 'pg ' + c, t));
+    r.title = s.err ? 'Причина: ' + s.err : 'Использовать только этот сервер';
+    r.onclick = () => api('select', {name: s.name}).then(tick);
+    return r;
+  };
+  alive.forEach(i => list.append(row(i)));
+  if (dead.length) {
+    const h = el('div', 'sub', (deadOpen ? '▾ ' : '▸ ') + `Не отвечают: ${dead.length}`);
+    h.onclick = () => { deadOpen = !deadOpen; renderServers(); };
+    list.append(h);
+    if (deadOpen) dead.forEach(i => list.append(row(i)));
+  }
+  if (info.length) {
+    const h = el('div', 'sub', (infoOpen ? '▾ ' : '▸ ') + `Служебные строки подписки: ${info.length}`);
+    h.title = 'Надписи от провайдера (остаток трафика, срок и т.п.) — это не серверы';
+    h.onclick = () => { infoOpen = !infoOpen; renderServers(); };
+    list.append(h);
+    if (infoOpen) info.forEach(i => { const d = el('div', 'note', parseName(S[i].name).text); d.style.padding = '3px 0'; list.append(d); });
+  }
+}
+
+function renderSpark(){
+  const svg = $('spark'), h = st.history || [];
+  const zm = st.zapret && st.zapret.supported && st.mode === 'zapret';
+  const hide = zm || h.filter(v => v > 0).length < 2;
+  svg.toggleAttribute('hidden', hide);
+  if (hide) return;
+  const vals = h.filter(v => v > 0), max = Math.max(...vals) * 1.15, min = 0;
+  let d = '', pen = false;
+  h.forEach((v, i) => {
+    const x = h.length < 2 ? 0 : i * 170 / (h.length - 1);
+    if (v > 0) { const y = 25 - (v - min) / (max - min) * 23; d += (pen ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1); pen = true; } else pen = false;
+  });
+  svg.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linejoin="miter" vector-effect="non-scaling-stroke"/>`;
+  svg.title = 'Пинг за последние 10 минут';
+}
+
+function renderProfiles(){
+  const L = $('profList'); L.textContent = '';
+  (st.profiles || []).forEach((p, i) => {
+    const r = el('div', 'prof' + (i === st.active ? ' act' : ''));
+    const x = el('button', 'x', '×'); x.title = 'Удалить';
+    x.onclick = e => { e.stopPropagation(); if (confirm(`Удалить подписку «${p.name}»?`)) api('profiles', {action: 'delete', index: i}).then(tick); };
+    const n = el('span', 'grow'); n.append(p.name); n.append(el('span', 'note', '  ' + p.hint));
+    r.append(el('span', 'dot'), n, x);
+    r.onclick = () => api('profiles', {action: 'select', index: i}).then(tick);
+    r.ondblclick = () => { const nn = prompt('Название подписки', p.name); if (nn) api('profiles', {action: 'rename', index: i, name: nn}).then(tick); };
+    L.append(r);
+  });
+  if (!(st.profiles || []).length && $('addForm').hidden) { $('addForm').hidden = false; $('addProf').hidden = true; }
+}
+
+function renderOpts(){
+  const o = st.opts || {}, z = st.zapret || {};
+  const set = (id, v) => { if (document.activeElement !== $(id)) $(id).checked = !!v; };
+  set('oAuto', o.autostart); set('oFb', o.fallback); set('oNotify', o.notify); set('oHk', o.hotkey);
+  $('oFbRow').hidden = !z.supported; $('oHkRow').hidden = !o.hotkeySupported;
+  if (document.activeElement !== $('oBy')) $('oBy').value = o.autoBy || 'ping';
+  if (document.activeElement !== $('oTheme')) $('oTheme').value = o.theme || '';
+  const r = o.rules || {};
+  const editing = ['rHome','rHomeMode','rOtherMode','rOn','rOff'].includes(document.activeElement && document.activeElement.id);
+  if (!editing && !rulesDirty) {
+    $('rNet').checked = !!r.netEnabled; $('rSched').checked = !!r.schedOn;
+    $('rHome').value = (r.home || []).join('\n');
+    $('rHomeMode').value = r.homeMode || 'zapret'; $('rOtherMode').value = r.otherMode || 'vpn';
+    $('rOn').value = r.onAt || ''; $('rOff').value = r.offAt || '';
+  }
+  $('rulesSum').textContent = [r.netEnabled ? 'по сети' : '', r.schedOn ? `${r.onAt || '?'}–${r.offAt || '?'}` : ''].filter(Boolean).join(', ') || 'выключены';
+}
+let rulesDirty = false;
+
+function render(){
+  if (!st) return;
+  applyTheme();
+  renderOpts();
+  renderSpark();
+  const z = st.zapret || {}, h = st.hotspot || {}, tg = st.tgws || {};
+  const zm = z.supported && st.mode === 'zapret';
+  const cur = (st.cur >= 0 && st.servers[st.cur]) ? st.servers[st.cur] : null;
+  const anyOn = st.on || !!z.running;
+
+  // режимы
+  $('seg').hidden = !z.supported;
+  document.querySelectorAll('#seg button').forEach(b => { b.classList.toggle('act', b.dataset.m === (zm ? 'zapret' : 'vpn')); b.disabled = !!z.busy; });
+  document.querySelectorAll('.sec[data-mode]').forEach(s => s.hidden = s.dataset.mode !== (zm ? 'zapret' : 'vpn'));
+
+  // кнопка и статус
+  const pw = $('pw');
+  pw.classList.toggle('on', anyOn);
+  $('pwHint').textContent = anyOn ? 'выключить' : 'включить';
+  pw.classList.toggle('busy', !!z.busy && zm);
+  const warpOn = z.warp && z.warp.on;
+  const label = z.running ? (warpOn ? 'Запрет + WARP' : 'Запрет') : st.on ? 'VPN' : '';
+  $('pill').classList.toggle('on', anyOn && !st.fallbackActive);
+  $('pill').classList.toggle('fb', !!st.fallbackActive);
+  $('pillT').textContent = st.fallbackActive ? 'резерв: запрет' : anyOn ? label : 'выключено';
+  const ct = $('curText'); ct.textContent = '';
+  if (zm) {
+    pw.disabled = busyPower || !!z.busy;
+    $('pwText').textContent = z.busy && !z.running ? 'Запускаю…' : z.running ? 'Включено' : 'Выключено';
+    if (z.running || z.strategyTitle) ct.append((z.running ? '' : 'Стратегия: ') + (z.strategyTitle || ''));
+  } else {
+    pw.disabled = busyPower || (!anyOn && (!st.core || !cur));
+    $('pwText').textContent = st.on ? 'Включено' : z.running ? 'Включён запрет' : 'Выключено';
+    if (cur) {
+      const nm = el('span'); nm.append(nameNode(cur.name)); nm.querySelector('.cc') && (nm.querySelector('.cc').style.marginRight = '6px');
+      ct.append(el('span', '', st.on ? 'через' : 'будет'), nm);
+      if (cur.ping > 0) ct.append(el('span', '', '· ' + cur.ping + ' мс'));
+      if (!st.pinned) ct.append(el('span', '', '· авто'));
+    } else if (!st.configured) ct.append(el('span', '', 'Вставьте ключ, чтобы начать'));
+  }
+
+  // серверы
+  if (!zm) {
+    const real = (st.servers || []).filter(s => s.kind !== 'info');
+    const alive = real.filter(s => s.ping > 0).length, all = real.length;
+    const ss = $('srvSum'); ss.textContent = '';
+    if (all) ss.append(`${alive} из ${all} отвечают`);
+    renderServers();
+    $('ru').checked = st.directRu;
+    const ap = (st.profiles || [])[st.active];
+    $('keySum').textContent = ap ? ap.name + ((st.profiles || []).length > 1 ? ` (${st.profiles.length})` : '') : 'не задана';
+    renderProfiles();
+    if (!st.configured && !opened.key) { opened.key = true; document.querySelector('.sec[data-k=key]').classList.add('open'); }
+    const sb = $('speedBtn'); sb.disabled = !!st.speedBusy || !st.on && !st.core;
+    sb.textContent = st.speedBusy ? `Тест скорости… ${st.speedDone}/${st.speedTotal}` : 'Тест скорости';
+  }
+
+  // запрет
+  if (zm) renderZapret(z);
+
+  // TG WS Proxy
+  $('tgSec').hidden = !tg.supported;
+  if (tg.supported) {
+    if (document.activeElement !== $('tg')) $('tg').checked = !!tg.on || (!!tg.busy && !tg.installed);
+    $('tg').disabled = !!tg.busy;
+    $('tgSum').textContent = tg.busy ? (tg.installed ? '…' : 'скачиваю…') : tg.error ? 'ошибка' : tg.on ? 'работает' : tg.installed ? 'выключен' : 'не установлен';
+    $('tgNote').textContent = tg.error ? '⚠ ' + tg.error : tg.version ? 'версия ' + tg.version : '';
+    $('tgNote').className = tg.error ? 'note err' : 'note';
+    $('tgLink').disabled = !tg.on;
+  }
+
+  // раздача
+  $('hsSec').hidden = !h.supported;
+  if (h.supported) {
+    if (document.activeElement !== $('hs')) $('hs').checked = !!h.on;
+    $('hs').disabled = !!h.busy;
+    const lc = $('hsLan'); lc.checked = !!h.preferLan; lc.disabled = !!h.on || !!h.busy;
+    if (document.activeElement !== $('hsCons')) $('hsCons').checked = !!h.console;
+    const gw = h.gw || {};
+    $('gwRow').hidden = !gw.supported; $('gwGamesRow').hidden = !gw.supported || !gw.on;
+    if (document.activeElement !== $('hsGw')) $('hsGw').checked = !!gw.on;
+    if (document.activeElement !== $('hsGwGames')) $('hsGwGames').checked = !gw.games;
+    $('hsSum').textContent = h.busy ? '…' : h.error ? 'ошибка' : h.on ? (h.lan ? 'локальная сеть' : (h.ssid || 'Wi-Fi')) : '';
+    const via = z.running ? (warpOn ? 'запрет + WARP' : 'запрет') : (st.on ? 'VPN' : 'обычный интернет');
+    $('hsText').textContent = h.error ? '⚠ ' + h.error
+      : h.on ? (h.lan ? 'Раздаётся в локальную сеть' : `Wi-Fi точка доступа, устройств: ${h.clients || 0}`) + ` · трафик идёт через: ${via}`
+      : 'Телефоны и другие устройства пойдут через VPN, запрет или запрет + WARP этого компьютера.';
+    $('hsText').className = h.error ? 'note err' : 'note';
+    const box = $('hsBox'); box.hidden = !h.on; box.textContent = '';
+    if (h.on) {
+      const add = (a, b) => { const d = el('div'); d.append(a); if (b) d.append(el('b', '', b)); box.append(d); };
+      if (h.note) box.append(el('div', 'mut', h.note));
+      if (!h.lan) { add('Сеть: ', h.ssid); add('Пароль: ', h.pass); }
+      if (h.proxy) {
+        const [ip, port] = h.proxy.split(':');
+        add('На устройстве: Wi-Fi → сеть → Прокси → Автоматически:');
+        add('', `http://${h.proxy}/proxy.pac`);
+        add('или Вручную: ', ip); add('порт ', port);
+        const q = el('div', 'qrs');
+        const fig = (text, cap) => { const f = el('figure'); const im = el('img'); im.src = '/api/qr?text=' + encodeURIComponent(text); f.append(im, cap); q.append(f); };
+        if (!h.lan && h.ssid) fig(`WIFI:T:WPA;S:${h.ssid.replace(/([\\;,:"])/g,'\\$1')};P:${(h.pass||'').replace(/([\\;,:"])/g,'\\$1')};;`, 'Подключиться к сети');
+        fig(`http://${h.proxy}/proxy.pac`, 'Адрес автонастройки');
+        box.append(q);
+      }
+      const gw = h.gw || {};
+      if (gw.on) {
+        const c = el('div'); c.style.marginTop = '10px';
+        if (gw.err) c.append(el('div', 'err', gw.err));
+        if (gw.pc) {
+          const lastOctet = gw.pc.split('.').slice(0, 3).join('.') + '.222';
+          c.append(el('div', '', 'Режим шлюза — на приставке настройте IP вручную:'));
+          const add = (a, b) => { const d = el('div'); d.append(a); d.append(el('b', '', b)); c.append(d); };
+          add('IP-адрес: ', lastOctet + ' (любой свободный в вашей сети)');
+          add('Маска подсети: ', '255.255.255.0');
+          add('Шлюз: ', gw.pc);
+          add('DNS: ', h.console && h.dns ? h.dns + (gw.router ? ', дополнительный ' + gw.router : '') : (gw.router || '1.1.1.1'));
+          c.append(el('div', 'mut', 'Xbox: Настройки → Общие → Параметры сети → Доп. параметры → Параметры IP → Вручную. PS4/PS5: Настройки → Сеть → Настроить соединение → Вручную / Особый → IP вручную.'));
+          c.append(el('div', gw.running ? '' : 'mut', gw.running
+            ? `Шлюз работает${gw.clients ? ' · приставки: ' + gw.clients : ' · ждёт приставку'} · ${(gw.mb || 0).toFixed(1)} МБ`
+            : 'Запускаю шлюз… (Windows может один раз спросить разрешение администратора)'));
+        }
+        box.append(c);
+      }
+      if (h.console) {
+        const c = el('div'); c.style.marginTop = '10px';
+        if (h.dns) {
+          c.append(el('div', '', 'Xbox / PlayStation / ТВ — в настройках сети на приставке:'));
+          const d = el('div'); d.append('DNS вручную — основной: '); d.append(el('b', '', h.dns));
+          d.append(h.dns2 ? ', дополнительный: ' : ' (дополнительный — такой же)'); if (h.dns2) d.append(el('b', '', h.dns2 + ' (роутер)')); c.append(d);
+          c.append(el('div', 'mut', 'Xbox: Настройки → Общие → Параметры сети → Доп. параметры → Параметры DNS → Вручную.'));
+          c.append(el('div', 'mut', 'PS4/PS5: Настройки → Сеть → Настроить соединение → Вручную / Особый → DNS вручную (PS также умеет прокси: ' + (h.proxy || '—') + ').'));
+          c.append(el('div', 'mut', 'YouTube, Discord, Instagram, Telegram и ваши сайты из «Запрета» пойдут через этот ПК, вход и службы Xbox — через зарубежный сервер, игры и загрузки — напрямую.'));
+          const g = h.geo || {};
+          if (g.ok) c.append(el('div', '', 'Вход в Xbox пойдёт через: ' + g.route + (g.last ? ' · последний раз: ' + g.last : '')));
+          else c.append(el('div', 'err', 'Нет зарубежного выхода для входа в Xbox (ошибка 0x80a40401): VPN-серверы не отвечают или все в России, WARP выключен. Включите WARP или дождитесь рабочего VPN-сервера.'));
+          c.append(el('div', h.dnsQ ? '' : 'err', h.dnsQ ? `Приставка на связи: DNS-запросов ${h.dnsQ}` : 'Пока ни одного запроса от приставки — проверьте, что DNS введён верно и приставка в той же сети.'));
+        } else if (h.dnsErr) c.append(el('div', 'err', h.dnsErr + ' — включите «В локальную сеть» или закройте программу, занявшую порт.'));
+        box.append(c);
+      }
+    }
+  }
+
+  // исключения
+  $('bpSum').textContent = (st.bypass || []).join(', ') || 'нет';
+  if (document.activeElement !== $('bpIn')) $('bpIn').value = (st.bypass || []).join('\n');
+
+  // мини-окно
+  if (MINI) {
+    const w = (z.warp || {});
+    $('mWarpRow').hidden = !zm; $('mTgRow').hidden = !tg.supported; $('mHsRow').hidden = !h.supported;
+    if (document.activeElement !== $('mWarp')) $('mWarp').checked = !!w.want;
+    if (document.activeElement !== $('mTg')) $('mTg').checked = !!tg.on;
+    if (document.activeElement !== $('mHs')) $('mHs').checked = !!h.on;
+  }
+
+  // подвал
+  const m = $('msg'); m.textContent = '';
+  if (st.error) m.append(el('div', 'err', st.error));
+  else if (!zm && st.status && st.busy) m.append(el('div', '', st.status));
+  if (st.fallbackActive) m.append(el('div', 'ev', 'VPN недоступен — временно работает запрет, вернусь на VPN автоматически'));
+  if (st.event) m.append(el('div', 'ev', st.event));
+}
+
+function renderZapret(z){
+  $('zSum').textContent = !z.installed ? 'не установлен' : z.busy ? '…' : (z.strategyTitle || 'стратегия не выбрана');
+  const s = $('zStatus'); s.textContent = ''; s.className = 'note'; s.style.margin = '0';
+  if (z.error) { s.className = 'note err'; s.textContent = z.error; }
+  else if (z.testing) s.textContent = `Проверяю ${z.done + 1} из ${z.total}: ${z.current}`;
+  else if (z.busy) s.textContent = z.busyText || 'Работаю…';
+  else if (z.running) { s.className = 'note ok'; s.textContent = 'Работает'; }
+  else s.textContent = z.strategy ? 'Готов к включению' : 'При первом включении подберу лучшую стратегию (2–3 мин)';
+  $('zBar').hidden = !z.testing;
+  if (z.testing && z.total) $('zBarI').style.width = Math.round(100 * z.done / z.total) + '%';
+  const sel = $('zSel');
+  if (document.activeElement !== sel) {
+    sel.textContent = '';
+    if (!z.strategy) { const o = el('option', '', '— стратегия не выбрана —'); o.value = ''; sel.append(o); }
+    (z.strategies || []).forEach(x => {
+      const o = el('option', '', x.title + (x.of ? `   ${x.ok}/${x.of}` + (x.ok ? ` · ${x.ms} мс` : '') : ''));
+      o.value = x.file; o.selected = x.file === z.strategy; sel.append(o);
+    });
+  }
+  sel.disabled = z.busy || !(z.strategies || []).length;
+  $('zTest').disabled = !!z.busy;
+  $('zxCount').textContent = (st.zextra || []).length;
+  if (document.activeElement !== $('zxIn')) $('zxIn').value = (st.zextra || []).join('\n');
+  $('zVer').textContent = z.installed ? 'Версия ' + (z.version || '?') + (z.latest && z.latest !== z.version ? ' · выходит ' + z.latest + ', обновлю сам' : ' · актуальная') : '';
+
+  const w = z.warp || {};
+  const cb = $('warp');
+  if (document.activeElement !== cb) cb.checked = !!w.want;
+  cb.disabled = !!w.busy;
+  $('warpSum').textContent =
+      w.installing ? (w.phase === 'warp-setup' ? 'устанавливаю…' : 'скачиваю' + (w.mbTotal ? ` ${w.mb}/${w.mbTotal} МБ` : '…'))
+    : w.busy ? (w.stage ? 'пробую: ' + w.stage : 'подключаю…')
+    : w.error ? '⚠ ' + w.error
+    : w.on ? 'подключён'
+    : !w.installed ? 'установится при включении'
+    : w.want ? 'включится с запретом' : '';
+  $('warpSum').title = w.error || '';
+  $('warpNote').hidden = !w.error; $('warpNote').textContent = w.error || '';
+  if (w.error) $('warpSum').textContent = 'не подключился';
+}
+
+let lastStateText = '', lastBusy = null;
+async function tick(){
+  try {
+    const t = await (await fetch('/api/state')).text();
+    // ничего не изменилось — не перерисовываем (меньше нагрузки на окно)
+    if (t === lastStateText && busyPower === lastBusy) return;
+    lastStateText = t; lastBusy = busyPower; st = JSON.parse(t); render();
+  }
+  catch { $('msg').textContent = 'Нет связи с программой — запустите VPN Auto заново'; }
+}
+async function loadLogs(){
+  const r = await api('log');
+  $('logCore').textContent = r.core || '(пусто)';
+  $('logApp').textContent = r.app || '(пусто)';
+  $('logZt').hidden = $('logZap').hidden = !r.zapret;
+  $('logZap').textContent = r.zapret || '';
+}
+
+$('pw').onclick = async () => {
+  busyPower = true; render();
+  const z = st.zapret || {};
+  const r = await api('power', {on: !(st.on || z.running)});
+  busyPower = false;
+  if (r && r.ok === false && r.error) $('msg').textContent = r.error;
+  tick();
+};
+document.querySelectorAll('#seg button').forEach(b => b.onclick = () => api('mode', {mode: b.dataset.m}).then(tick));
+$('addProf').onclick = () => { $('addForm').hidden = false; $('addProf').hidden = true; $('keyIn').focus(); };
+$('cancelAdd').onclick = () => { $('addForm').hidden = true; $('addProf').hidden = false; $('keyIn').value = ''; $('profName').value = ''; };
+$('saveKey').onclick = async () => {
+  const k = $('keyIn').value.trim();
+  if (!k) { $('keyIn').focus(); return; }
+  await api('profiles', {action: 'add', name: $('profName').value, key: k});
+  $('keyIn').value = ''; $('profName').value = ''; $('addForm').hidden = true; $('addProf').hidden = false;
+  $('keyNote').textContent = 'Добавлено, загружаю серверы…';
+  setTimeout(() => $('keyNote').textContent = '', 3000);
+  opened.srv = true; document.querySelector('.sec[data-k=srv]').classList.add('open');
+  tick();
+};
+$('refresh').onclick = () => api('refresh', {}).then(tick);
+$('ru').onchange = e => api('directru', {value: e.target.checked}).then(tick);
+$('zSel').onchange = e => { if (e.target.value) api('zapret/strategy', {file: e.target.value}).then(tick); e.target.blur(); };
+$('zTest').onclick = () => api('zapret/test', {}).then(r => { if (r && r.ok === false && r.error) $('msg').textContent = r.error; tick(); });
+$('zUpd').onclick = () => api('zapret/update', {}).then(tick);
+$('warp').onchange = async e => { await api('warp', {on: e.target.checked}); e.target.blur(); tick(); };
+$('tg').onchange = async e => { const r = await api('tgws', {on: e.target.checked}); if (r && r.error) $('msg').textContent = r.error; e.target.blur(); tick(); };
+$('tgLink').onclick = async () => { const r = await api('tgws/telegram', {}); $('tgNote').textContent = r.ok ? 'Открыл Telegram — подтвердите добавление прокси' : 'Не нашёл настройки — используйте «Открыть в Telegram» в трее TG WS Proxy'; };
+$('hs').onchange = async e => { await api('hotspot', {on: e.target.checked}); e.target.blur(); tick(); };
+$('hsLan').onchange = e => api('sharelan', {value: e.target.checked}).then(tick);
+$('hsGw').onchange = e => { api('gateway', {on: e.target.checked}).then(() => setTimeout(tick, 400)); e.target.blur(); };
+$('hsGwGames').onchange = e => { api('gateway', {gamesVPN: e.target.checked}).then(tick); e.target.blur(); };
+$('hsCons').onchange = e => { api('shareconsole', {value: e.target.checked}).then(() => setTimeout(tick, 400)); e.target.blur(); };
+$('bpSave').onclick = async () => {
+  const r = await api('bypass', {list: $('bpIn').value.split(/[\s,;]+/)});
+  $('bpIn').blur(); $('bpOk').textContent = r && r.ok ? 'Сохранено' : '';
+  setTimeout(() => $('bpOk').textContent = '', 2500); tick();
+};
+$('zxSave').onclick = async () => {
+  const r = await api('zextra', {list: $('zxIn').value.split(/[\s,;]+/)});
+  $('zxIn').blur(); $('zxOk').textContent = r && r.ok ? 'Сохранено, запрет перезапущен' : '';
+  setTimeout(() => $('zxOk').textContent = '', 3000); tick();
+};
+$('speedBtn').onclick = () => api('speedtest', {}).then(tick);
+const opt = (k, v) => api('settings', {[k]: v}).then(r => { if (r && r.error) $('msg').textContent = r.error; tick(); });
+$('oAuto').onchange = e => opt('autostart', e.target.checked);
+$('oFb').onchange = e => opt('fallback', e.target.checked);
+$('oNotify').onchange = e => opt('notify', e.target.checked);
+$('oHk').onchange = e => opt('hotkey', e.target.checked);
+$('oBy').onchange = e => { opt('autoBy', e.target.value); e.target.blur(); };
+$('oTheme').onchange = e => { opt('theme', e.target.value); e.target.blur(); };
+
+// ---- обновления ----
+function renderUpd(u){
+  if (!u || !u.current) return;
+  if (document.activeElement !== $('oUpd')) $('oUpd').checked = !!u.auto;
+  let t = 'Версия ' + u.current + ' · by undr';
+  if (u.busy) t += ` · ${u.stage || 'обновляю'}${u.progress ? ' ' + Math.round(u.progress * 100) + '%' : ''}…`;
+  else if (u.available) t += ' · доступна ' + u.latest;
+  else if (u.latest) t += ' · актуальная' + (u.checked ? ' (проверено в ' + u.checked + ')' : '');
+  if (u.error) t += ' · ' + u.error;
+  $('updNote').textContent = t;
+  $('updGo').hidden = !u.available || u.busy;
+  $('updGo').textContent = 'Обновить до ' + (u.latest || '');
+}
+const updApi = body => api('update', body || {}).then(renderUpd);
+$('oUpd').onchange = e => { updApi({auto: e.target.checked}); e.target.blur(); };
+$('updCheck').onclick = () => { $('updNote').textContent = 'Проверяю…'; updApi({do: 'check'}); };
+$('updGo').onclick = () => { updApi({do: 'install'}); };
+updApi();
+setInterval(() => { if (!document.hidden) updApi(); }, 5000);
+['rNet','rSched','rHome','rHomeMode','rOtherMode','rOn','rOff'].forEach(id => $(id).addEventListener('input', () => rulesDirty = true));
+$('rAddCur').onclick = () => { const n = $('rCur').textContent; if (n && n !== '…' && n !== 'не определена') { const L = $('rHome').value.split('\n').filter(Boolean); if (!L.includes(n)) L.push(n); $('rHome').value = L.join('\n'); rulesDirty = true; } };
+$('rSave').onclick = async () => {
+  const rules = {netEnabled: $('rNet').checked, home: $('rHome').value.split('\n').map(x => x.trim()).filter(Boolean),
+    homeMode: $('rHomeMode').value, otherMode: $('rOtherMode').value, schedOn: $('rSched').checked, onAt: $('rOn').value, offAt: $('rOff').value};
+  await api('settings', {rules}); rulesDirty = false;
+  $('rOk').textContent = 'Сохранено'; setTimeout(() => $('rOk').textContent = '', 2500); tick();
+};
+async function loadNet(){ const r = await api('netname'); $('rCur').textContent = r.name || 'не определена'; }
+document.querySelector('.sec[data-k=rules] .sh').addEventListener('click', () => { if (opened.rules) loadNet(); });
+if (opened.rules) loadNet();
+$('mWarp').onchange = async e => { await api('warp', {on: e.target.checked}); tick(); };
+$('mTg').onchange = async e => { const r = await api('tgws', {on: e.target.checked}); if (r && r.error) $('msg').textContent = r.error; tick(); };
+$('mHs').onchange = async e => { await api('hotspot', {on: e.target.checked}); tick(); };
+$('mFull').onclick = () => { api('full', {}); setTimeout(() => window.close(), 300); };
+$('logOpen').onclick = () => api('openlogs', {});
+$('logRef').onclick = loadLogs;
+$('quit').onclick = async () => {
+  if (!confirm('Выйти из VPN Auto? Всё будет выключено.')) return;
+  clearInterval(timer);
+  await api('tray?do=quit');
+  document.body.innerHTML = '<p style="padding:30px;color:#7d8793">VPN Auto закрыт. Окно можно закрыть.</p>';
+  setTimeout(() => window.close(), 800);
+};
+
+addEventListener('pagehide', () => navigator.sendBeacon('/api/closing'));
+document.addEventListener('contextmenu', e => { if (!e.target.closest('textarea,pre,.box')) e.preventDefault(); });
+if (opened.diag) loadLogs();
+tick();
+const timer = setInterval(tick, 1500);
+</script>
+</body>
+</html>
