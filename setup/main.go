@@ -29,7 +29,7 @@ var appIcon []byte
 //go:embed dialog.ps1
 var dialogPS string
 
-const version = "1.12.3"
+const version = "1.12.4"
 const uninstKey = `HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\VPNAuto`
 
 var procMsgBox = syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW")
@@ -75,6 +75,53 @@ func existingInstall() string {
 	return ""
 }
 
+var (
+	kernel32        = syscall.NewLazyDLL("kernel32.dll")
+	pGetDriveType   = kernel32.NewProc("GetDriveTypeW")
+	pQueryDosDevice = kernel32.NewProc("QueryDosDeviceW")
+)
+
+// Папка на обычном локальном диске? Сетевые, съёмные и виртуальные (subst) диски не годятся:
+// их не видят процессы с правами администратора (задача запрета не запустится),
+// а меню «Пуск» не показывает программы с таких дисков.
+func localFixed(path string) bool {
+	vol := filepath.VolumeName(path)
+	if len(vol) != 2 || vol[1] != ':' {
+		return false // \\server\share и т.п.
+	}
+	root, _ := syscall.UTF16PtrFromString(vol + `\`)
+	if t, _, _ := pGetDriveType.Call(uintptr(unsafe.Pointer(root))); t != 3 { // DRIVE_FIXED
+		return false
+	}
+	name, _ := syscall.UTF16PtrFromString(vol)
+	buf := make([]uint16, 1024)
+	if n, _, _ := pQueryDosDevice.Call(uintptr(unsafe.Pointer(name)), uintptr(unsafe.Pointer(&buf[0])), 1024); n > 0 {
+		if strings.HasPrefix(syscall.UTF16ToString(buf), `\??\`) { // subst
+			return false
+		}
+	}
+	return true
+}
+
+// Скопировать папку (запрет, TG WS Proxy) при переносе программы на другой диск.
+func copyDir(src, dst string) error {
+	return filepath.Walk(src, func(p string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(src, p)
+		t := filepath.Join(dst, rel)
+		if fi.IsDir() {
+			return os.MkdirAll(t, 0755)
+		}
+		b, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(t, b, fi.Mode())
+	})
+}
+
 func desktopShortcutExists() bool {
 	out, _ := runPS(`$d=[Environment]::GetFolderPath('Desktop'); (Test-Path -LiteralPath (Join-Path $d 'NETtool.lnk')) -or (Test-Path -LiteralPath (Join-Path $d 'VPN Auto.lnk'))`)
 	return strings.Contains(string(out), "True")
@@ -84,9 +131,10 @@ func main() {
 	defDir := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "NETtool")
 	old := existingInstall()
 	updating := old != ""
-	if updating {
+	if updating && localFixed(old) {
 		defDir = old
 	}
+	// прежняя установка на сетевом/виртуальном диске — переносим на C: (см. localFixed)
 
 	tmp, _ := os.MkdirTemp("", "vpnauto-setup")
 	defer os.RemoveAll(tmp)
@@ -155,6 +203,13 @@ func main() {
 			if wantWarp {
 				wantZap = true
 			}
+		}
+	}
+	if !localFixed(dir) {
+		alt := filepath.Join(os.Getenv("LOCALAPPDATA"), "Programs", "NETtool")
+		if silent || msgBox("Папка «"+dir+"» — на сетевом или виртуальном диске.\n\nОттуда не работают запрет (Windows не даёт запускать его с правами администратора) "+
+			"и значок в меню «Пуск».\n\nУстановить в "+alt+"?", 0x4|0x30) == 6 {
+			dir = alt
 		}
 	}
 	// своя отдельная папка — чтобы удаление ничего лишнего не задело
@@ -229,8 +284,25 @@ func main() {
 
 	// старая копия в другой папке больше не нужна
 	if updating && !strings.EqualFold(filepath.Clean(old), filepath.Clean(dir)) {
+		// перенос: запрет и TG WS Proxy — в новую папку; задачу запрета пересоздаём под новый путь
+		for _, sub := range []string{"zapret", "tgwsproxy"} {
+			src, dst := filepath.Join(old, sub), filepath.Join(dir, sub)
+			if fileExists(src) && !fileExists(dst) {
+				if copyDir(src, dst) == nil {
+					os.RemoveAll(src)
+					if sub == "zapret" {
+						wantZap = true // заново создать задачу запуска (запрет уже на месте — скачивать не будет)
+					}
+				}
+			}
+		}
 		os.Remove(filepath.Join(old, "VPNAuto.exe"))
 		os.Remove(filepath.Join(old, "icon.ico"))
+		if olds, _ := filepath.Glob(filepath.Join(old, "icon*.ico")); len(olds) > 0 {
+			for _, o := range olds {
+				os.Remove(o)
+			}
+		}
 		os.Remove(old)
 	}
 
