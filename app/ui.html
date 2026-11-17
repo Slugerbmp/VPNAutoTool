@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>NETtool</title>
-<link rel="icon" type="image/png" href="/favicon.png?v=1121">
+<link rel="icon" type="image/png" href="/favicon.png?v=1122">
 <meta name="theme-color" id="themeColor" content="#0a0a0a">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
@@ -156,7 +156,7 @@
   <div id="tb"><div class="d" id="tbD">NETtool</div><button id="tbMin" title="Свернуть">—</button><button id="tbX" title="Закрыть">×</button></div>
   <div id="grip"></div>
   <header>
-    <img src="/favicon.png?v=1121" alt="">
+    <img src="/favicon.png?v=1122" alt="">
     <span class="t">NETtool</span>
     <span class="pill" id="pill"><i></i><span id="pillT">выключено</span></span>
   </header>
@@ -279,7 +279,10 @@
         <div class="note">Программа</div><pre id="logApp">…</pre>
         <div class="note" id="logZt" hidden>Запрет</div><pre id="logZap" hidden></pre>
         <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
+        <div class="row"><button class="btn" id="repBtn">Починить файлы</button><span class="note" style="margin:0 0 0 10px">скачает недостающее и исправит то, что удалил антивирус</span></div>
+        <pre id="repLog" hidden></pre>
         <div class="row" id="defRow"><button class="lnk" id="defBtn">Добавить NETtool в исключения Защитника Windows</button><span class="note" id="defNote" style="margin:0 0 0 8px"></span></div>
+        <div class="note" id="avNote" hidden></div>
       </div>
     </section>
   </div>
@@ -804,6 +807,25 @@ $('mTg').onchange = async e => { const r = await api('tgws', {on: e.target.check
 $('mHs').onchange = async e => { await api('hotspot', {on: e.target.checked}); tick(); };
 $('mFull').onclick = () => { api('full', {}); setTimeout(() => window.close(), 300); };
 $('logOpen').onclick = () => api('openlogs', {});
+// сторонний антивирус (Kaspersky, ESET, Avast…) — исключения добавляются в нём самом
+api('av', {}).then(r => {
+  const other = ((r && r.names) || []).filter(n => !/defender|защитник/i.test(n));
+  if (!other.length) return;
+  $('avNote').hidden = false;
+  $('avNote').textContent = 'Установлен ' + other.join(', ') + '. Он может блокировать или удалять NETtool и запрет (ложное срабатывание). ' +
+    'Добавьте в его исключения/доверенные программы папку программы и папку данных %LOCALAPPDATA%\\VPNAuto. ' +
+    (/kaspersky/i.test(other.join(' ')) ? 'Kaspersky: Настройки → Безопасность → Исключения и действия при обнаружении → Указать доверенные программы и Управление исключениями.' : '');
+});
+async function repPoll(){
+  const r = await api('repair');
+  if (!r) return;
+  $('repLog').hidden = !(r.lines && r.lines.length);
+  $('repLog').textContent = (r.lines || []).join('\n');
+  $('repBtn').disabled = !!r.busy;
+  $('repBtn').textContent = r.busy ? 'Чиню…' : 'Починить файлы';
+  if (r.busy) setTimeout(repPoll, 1000); else tick();
+}
+$('repBtn').onclick = async () => { await api('repair', {start: true}); repPoll(); };
 $('defBtn').onclick = async () => {
   $('defNote').textContent = 'Подтвердите запрос Windows…';
   const r = await api('defender', {});

@@ -165,7 +165,7 @@ func setAutostart(on bool) error {
 	}
 	exe, _ := os.Executable()
 	if out, err := hiddenCmd("reg", "add", runKey, "/v", "NETtool", "/t", "REG_SZ", "/d", `"`+exe+`" --autostart`, "/f").CombinedOutput(); err != nil {
-		return fmt.Errorf("автозапуск: %s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("автозапуск: %s", strings.TrimSpace(decodeOEM(out)))
 	}
 	return nil
 }
@@ -178,7 +178,7 @@ func currentNetwork() string {
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return strings.TrimSpace(decodeOEM(out))
 }
 
 // Быстрая проверка, запущен ли процесс (без запуска tasklist).

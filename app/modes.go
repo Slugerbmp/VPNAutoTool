@@ -804,6 +804,9 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 		}
 		writeJSON(w, map[string]any{"ok": true, "list": list})
 	})
+	m.HandleFunc("/api/av", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, map[string]any{"names": installedAV()})
+	})
 	m.HandleFunc("/api/defender", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if zapretTaskExists() {

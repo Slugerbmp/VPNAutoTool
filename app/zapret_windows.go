@@ -128,7 +128,7 @@ func zapretSetupTask() error {
 	defer os.Remove(f)
 	out, err := hiddenCmd("schtasks", "/create", "/tn", zapretTaskName, "/xml", f, "/f").CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("schtasks: %s", strings.TrimSpace(string(out)))
+		return fmt.Errorf("schtasks: %s", strings.TrimSpace(decodeOEM(out)))
 	}
 	return nil
 }
@@ -164,7 +164,12 @@ func zapretRun(c zCmd, wait time.Duration) (zState, error) {
 	c.Extra = zapretExtra
 	writeJSONFile(zCmdPath(), c)
 	if out, err := hiddenCmd("schtasks", "/run", "/tn", zapretTaskName).CombinedOutput(); err != nil {
-		return zState{}, fmt.Errorf("не удалось запустить задачу: %s", strings.TrimSpace(string(out)))
+		msg := strings.TrimSpace(decodeOEM(out))
+		low := strings.ToLower(msg)
+		if strings.Contains(low, "отказано в доступе") || strings.Contains(low, "access is denied") {
+			msg += " — скорее всего, запуск блокирует антивирус (Kaspersky и т.п.): добавьте NETtool в его доверенные программы"
+		}
+		return zState{}, fmt.Errorf("не удалось запустить задачу: %s", msg)
 	}
 	if wait == 0 {
 		return zState{}, nil
@@ -225,7 +230,7 @@ func zapretTaskMain() {
 		hiddenCmd("netsh", "advfirewall", "firewall", "delete", "rule", "name=VPN Auto hotspot").Run()
 		if out, err := hiddenCmd("netsh", "advfirewall", "firewall", "add", "rule", "name=VPN Auto hotspot", "dir=in", "action=allow",
 			"program="+exe, "enable=yes", "profile=any").CombinedOutput(); err != nil {
-			runErr = fmt.Errorf("брандмауэр: %s", strings.TrimSpace(string(out)))
+			runErr = fmt.Errorf("брандмауэр: %s", strings.TrimSpace(decodeOEM(out)))
 		}
 		// порты для приставок (DNS, HTTP, HTTPS) и прокси раздачи — отдельными правилами
 		hiddenCmd("netsh", "advfirewall", "firewall", "delete", "rule", "name=VPN Auto consoles").Run()
@@ -472,7 +477,7 @@ func warpExec(args ...string) (string, error) {
 	}
 	run := func(a []string) (string, error) {
 		out, err := hiddenCmd(cli, a...).CombinedOutput()
-		return strings.TrimSpace(string(out)), err
+		return strings.TrimSpace(decodeOEM(out)), err
 	}
 	var out string
 	var err error
@@ -706,10 +711,25 @@ func warpConnect() error {
 	if reason == "" {
 		reason = "нет ответа"
 	}
-	if strings.Contains(last, "MITM") {
-		return errors.New("WARP видит, что его подключение искажается по пути: так бывает, если провайдер блокирует WARP или запрет работает ещё и на роутере")
+	// чаще всего мешает не провайдер, а программы на этом компьютере
+	var hints []string
+	for _, n := range installedAV() {
+		if !strings.Contains(strings.ToLower(n), "defender") {
+			hints = append(hints, n+" (антивирус может блокировать подключение WARP: добавьте Cloudflare WARP в доверенные программы или на минуту отключите защиту и попробуйте снова)")
+		}
 	}
-	return fmt.Errorf("WARP не подключился ни одним способом (перепробовано %d вариантов: MASQUE и WireGuard на разных портах). Похоже, провайдер блокирует WARP. Последний ответ: %s", len(variants)+1, reason)
+	for _, p := range []string{"Happ.exe", "v2rayN.exe", "nekoray.exe", "Hiddify.exe", "clash-verge.exe", "Clash Verge.exe", "AmneziaVPN.exe", "outline-client.exe"} {
+		if processRunning(p) {
+			hints = append(hints, "запущен "+strings.TrimSuffix(p, ".exe")+" (другой VPN мешает WARP — закройте его полностью, в том числе в трее)")
+		}
+	}
+	if strings.Contains(last, "MITM") {
+		hints = append(hints, "подключение WARP искажается по пути (запрет ещё и на роутере или антивирус проверяет зашифрованный трафик)")
+	}
+	if len(hints) > 0 {
+		return fmt.Errorf("WARP не подключился. Возможная причина на этом компьютере: %s. Последний ответ WARP: %s", strings.Join(hints, "; "), reason)
+	}
+	return fmt.Errorf("WARP не подключился ни одним способом (перепробовано %d вариантов: MASQUE и WireGuard на разных портах). Последний ответ: %s", len(variants)+1, reason)
 }
 
 func firstLine(s string) string {
@@ -767,7 +787,7 @@ func defenderExclude() error {
 	ps := "Add-MpPreference -ExclusionPath " + strings.Join(q, ",") + " -ErrorAction Stop"
 	out, err := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).CombinedOutput()
 	if err != nil {
-		s := strings.TrimSpace(string(out))
+		s := strings.TrimSpace(decodeOEM(out))
 		if strings.Contains(s, "0x800106ba") || strings.Contains(strings.ToLower(s), "not running") {
 			return errors.New("Защитник Windows выключен или заменён другим антивирусом — добавьте папки в исключения своего антивируса вручную")
 		}
@@ -799,4 +819,55 @@ func defenderRefresh() {
 	}
 }
 
+var avCache struct {
+	sync.Mutex
+	names []string
+	at    time.Time
+}
+
+// Установленные антивирусы (Центр безопасности Windows) — чтобы подсказать, где добавлять исключения.
+func installedAV() []string {
+	avCache.Lock()
+	defer avCache.Unlock()
+	if time.Since(avCache.at) < 10*time.Minute && avCache.at.Unix() > 0 {
+		return avCache.names
+	}
+	out, _ := hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command",
+		`[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct | ForEach-Object { $_.displayName }`).Output()
+	var names []string
+	for _, l := range strings.Split(strings.ReplaceAll(string(out), "\r", ""), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			names = append(names, l)
+		}
+	}
+	avCache.names, avCache.at = names, time.Now()
+	return names
+}
+
 func psQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
+
+// Все ли ключевые файлы запрета на месте (антивирусы часто удаляют WinDivert и winws).
+func zapretFilesOK() bool {
+	for _, f := range []string{"winws.exe", "WinDivert.dll", "WinDivert64.sys", "cygwin1.dll"} {
+		if _, err := os.Stat(filepath.Join(zapretDir(), "bin", f)); err != nil {
+			return false
+		}
+	}
+	return true
+}
+
+// Ярлык «NETtool» в «Пуске»: создать, если его нет. true — был создан.
+func repairShortcut(ico string) bool {
+	progs := filepath.Join(os.Getenv("APPDATA"), `Microsoft\Windows\Start Menu\Programs`)
+	lnk := filepath.Join(progs, "NETtool.lnk")
+	if _, err := os.Stat(lnk); err == nil {
+		return false
+	}
+	exe, _ := os.Executable()
+	ps := `$w=New-Object -ComObject WScript.Shell; $s=$w.CreateShortcut(` + psQuote(lnk) + `); $s.TargetPath=` + psQuote(exe) +
+		`; $s.WorkingDirectory=` + psQuote(filepath.Dir(exe)) + `; $s.IconLocation=` + psQuote(ico+",0") +
+		`; $s.Description='NETtool by undr'; $s.Save()`
+	hiddenCmd("powershell", "-NoProfile", "-NonInteractive", "-Command", ps).Run()
+	_, err := os.Stat(lnk)
+	return err == nil
+}

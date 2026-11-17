@@ -61,3 +61,6 @@ func warpExec(args ...string) (string, error) { return "", errNoZapret }
 func defenderExclude() error                  { return errNoZapret }
 func psQuote(s string) string                 { return s }
 func defenderRefresh()                        {}
+func installedAV() []string                   { return nil }
+func zapretFilesOK() bool                     { return false }
+func repairShortcut(string) bool              { return false }

@@ -67,7 +67,7 @@ func hotspotPS(action string) (hsState, error) {
 	cmd.Env = append(os.Environ(), "VA_HS="+action)
 	out, err := cmd.Output()
 	var s hsState
-	txt := strings.TrimSpace(string(out))
+	txt := strings.TrimSpace(decodeOEM(out))
 	if i := strings.LastIndex(txt, "{"); i >= 0 {
 		txt = txt[i:]
 	}
