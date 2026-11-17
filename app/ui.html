@@ -229,7 +229,7 @@
         <div class="line" style="padding-top:0"><span class="grow mut">В локальную сеть (провод / роутер) вместо Wi-Fi точки</span><label class="sw"><input type="checkbox" id="hsLan"><span></span></label></div>
         <div class="line"><span class="grow mut">Приставки и ТВ без прокси (Xbox, PlayStation)</span><label class="sw"><input type="checkbox" id="hsCons"><span></span></label></div>
         <div class="line" id="gwRow"><span class="grow mut">Режим шлюза: весь трафик приставки через ПК (Discord, голос, всё)</span><label class="sw"><input type="checkbox" id="hsGw"><span></span></label></div>
-        <div class="line" id="gwGamesRow"><span class="grow mut">Игры тоже через VPN (выше пинг; обычно не нужно)</span><label class="sw"><input type="checkbox" id="hsGwGames"><span></span></label></div>
+        <div class="line" id="gwGamesRow"><span class="grow mut">Игры напрямую, мимо VPN (меньше пинг; если игра не пускает в онлайн — выключите)</span><label class="sw"><input type="checkbox" id="hsGwGames"><span></span></label></div>
         <div id="hsText" class="note" style="margin:0"></div>
         <div class="box" id="hsBox" hidden></div>
       </div>
@@ -578,7 +578,7 @@ function render(){
     const gw = h.gw || {};
     $('gwRow').hidden = !gw.supported; $('gwGamesRow').hidden = !gw.supported || !gw.on;
     if (document.activeElement !== $('hsGw')) $('hsGw').checked = !!gw.on;
-    if (document.activeElement !== $('hsGwGames')) $('hsGwGames').checked = !gw.games;
+    if (document.activeElement !== $('hsGwGames')) $('hsGwGames').checked = !!gw.games;
     $('hsSum').textContent = h.busy ? '…' : h.error ? 'ошибка' : h.on ? (h.lan ? 'локальная сеть' : (h.ssid || 'Wi-Fi')) : '';
     const via = z.running ? (warpOn ? 'запрет + WARP' : 'запрет') : (st.on ? 'VPN' : 'обычный интернет');
     $('hsText').textContent = h.error ? '⚠ ' + h.error
@@ -760,7 +760,7 @@ $('tgLink').onclick = async () => { const r = await api('tgws/telegram', {}); $(
 $('hs').onchange = async e => { await api('hotspot', {on: e.target.checked}); e.target.blur(); tick(); };
 $('hsLan').onchange = e => api('sharelan', {value: e.target.checked}).then(tick);
 $('hsGw').onchange = e => { api('gateway', {on: e.target.checked}).then(() => setTimeout(tick, 400)); e.target.blur(); };
-$('hsGwGames').onchange = e => { api('gateway', {gamesVPN: e.target.checked}).then(tick); e.target.blur(); };
+$('hsGwGames').onchange = e => { api('gateway', {gamesDirect: e.target.checked}).then(tick); e.target.blur(); };
 $('hsCons').onchange = e => { api('shareconsole', {value: e.target.checked}).then(() => setTimeout(tick, 400)); e.target.blur(); };
 $('bpSave').onclick = async () => {
   const r = await api('bypass', {list: $('bpIn').value.split(/[\s,;]+/)});

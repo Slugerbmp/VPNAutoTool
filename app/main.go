@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.13.0"
+	appVersion = "1.13.1"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -94,34 +94,35 @@ var trayOK bool
 var badTagRe = regexp.MustCompile(`outbound config with tag srv-(\d+)`)
 
 type Settings struct {
-	Key          string    `json:"key"`
-	DirectRu     bool      `json:"directRu"`
-	Pinned       string    `json:"pinned"`
-	Mode         string    `json:"mode"`
-	ZStrategy    string    `json:"zapretStrategy"`
-	Warp         bool      `json:"warp"`
-	Bypass       []string  `json:"bypass"`
-	FirewallOK   bool      `json:"firewallOk"`
-	ShareLAN     bool      `json:"shareLan"`
-	ShareCons    bool      `json:"shareConsole"`
-	Gateway      bool      `json:"gateway"`
-	NoAutoUpdate bool      `json:"noAutoUpdate"`
-	LastServer   string    `json:"lastServer,omitempty"`
-	GwGamesVPN   bool      `json:"gatewayGamesVpn"`
-	TgOn         bool      `json:"tgOn"`
-	Notify       *bool     `json:"notify,omitempty"`
-	Fallback     *bool     `json:"fallback,omitempty"`
-	Hotkey       *bool     `json:"hotkey,omitempty"`
-	Autostart    bool      `json:"autostart"`
-	Theme        string    `json:"theme"`
-	AutoBy       string    `json:"autoBy"`
-	Profiles     []Profile `json:"profiles"`
-	Active       int       `json:"active"`
-	LastOn       bool      `json:"lastOn"`
-	LegacyCore   bool      `json:"legacyCore"`
-	WarpReset    bool      `json:"warpReset"`
-	ZExtra       []string  `json:"zapretExtra"`
-	Rules        Rules     `json:"rules"`
+	Key           string    `json:"key"`
+	DirectRu      bool      `json:"directRu"`
+	Pinned        string    `json:"pinned"`
+	Mode          string    `json:"mode"`
+	ZStrategy     string    `json:"zapretStrategy"`
+	Warp          bool      `json:"warp"`
+	Bypass        []string  `json:"bypass"`
+	FirewallOK    bool      `json:"firewallOk"`
+	ShareLAN      bool      `json:"shareLan"`
+	ShareCons     bool      `json:"shareConsole"`
+	Gateway       bool      `json:"gateway"`
+	NoAutoUpdate  bool      `json:"noAutoUpdate"`
+	LastServer    string    `json:"lastServer,omitempty"`
+	GwGamesVPN    bool      `json:"gatewayGamesVpn"` // устарело: теперь игры по умолчанию через VPN
+	GwGamesDirect bool      `json:"gatewayGamesDirect"`
+	TgOn          bool      `json:"tgOn"`
+	Notify        *bool     `json:"notify,omitempty"`
+	Fallback      *bool     `json:"fallback,omitempty"`
+	Hotkey        *bool     `json:"hotkey,omitempty"`
+	Autostart     bool      `json:"autostart"`
+	Theme         string    `json:"theme"`
+	AutoBy        string    `json:"autoBy"`
+	Profiles      []Profile `json:"profiles"`
+	Active        int       `json:"active"`
+	LastOn        bool      `json:"lastOn"`
+	LegacyCore    bool      `json:"legacyCore"`
+	WarpReset     bool      `json:"warpReset"`
+	ZExtra        []string  `json:"zapretExtra"`
+	Rules         Rules     `json:"rules"`
 }
 
 type App struct {

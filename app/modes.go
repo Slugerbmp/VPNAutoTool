@@ -840,8 +840,9 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 	})
 	m.HandleFunc("/api/gateway", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
-			On       *bool
-			GamesVPN *bool
+			On          *bool
+			GamesVPN    *bool
+			GamesDirect *bool
 		}
 		json.NewDecoder(r.Body).Decode(&req)
 		a.mu.Lock()
@@ -851,8 +852,11 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 			gwMgr.fails, gwMgr.err, gwMgr.lastTry = 0, "", time.Time{} // заново — новые попытки
 			gwMgr.Unlock()
 		}
+		if req.GamesDirect != nil {
+			a.settings.GwGamesDirect = *req.GamesDirect
+		}
 		if req.GamesVPN != nil {
-			a.settings.GwGamesVPN = *req.GamesVPN
+			a.settings.GwGamesDirect = !*req.GamesVPN
 		}
 		a.saveSettings()
 		a.mu.Unlock()

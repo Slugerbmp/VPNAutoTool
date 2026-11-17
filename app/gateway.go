@@ -106,6 +106,8 @@ var gameHosts = []string{
 	"rockstargames.com", "riotgames.com", "nintendo.net", "steamserver.net", "playfabapi.com",
 }
 
+var gwUDPWarned atomic.Bool
+
 func isGameHost(host string) bool { return hostBypassed(host, gameHosts) }
 
 // nativeTCP — соединение от компьютера мимо WARP/VPN, через роутер (адрес компьютера в сети).
@@ -194,10 +196,20 @@ func (g *gateway) onForward(b []byte) bool {
 		if f == nil {
 			var up udpUpstream
 			var err error
+			via := "VPN/компьютер"
 			if native { // интернет компьютера идёт через WARP/VPN — игры отправляем мимо него
 				up, err = g.nativeUDP(dst)
+				via = "напрямую (дом. адрес)"
 			} else {
 				up, err = g.udpDial(c, dst)
+				if _, ok := up.(*socksUDP); ok {
+					via = "VPN"
+				} else {
+					via = "с компьютера"
+				}
+			}
+			if gwUDPLogged.Add(1) <= 200 {
+				gwLog("UDP %s → %s (err=%v)", dst, via, err)
 			}
 			if err != nil {
 				return true // молча теряем: UDP переживёт
@@ -373,6 +385,25 @@ func hostBypassed(host string, list []string) bool {
 }
 
 func (g *gateway) tcpDial(host string, dst netip.AddrPort) (net.Conn, error) {
+	up, via, err := g.tcpDialVia(host, dst)
+	// журнал соединений приставки (первые 400 и все ошибки, не больше 400) — для разбора проблем
+	if n := gwConnLogged.Add(1); n <= 400 || (err != nil && gwConnErrs.Add(1) <= 400) {
+		name := host
+		if name == "" {
+			name = "(без имени)"
+		}
+		if err != nil {
+			gwLog("TCP %s %s → %s: ошибка %v", dst, name, via, err)
+		} else if n <= 400 {
+			gwLog("TCP %s %s → %s", dst, name, via)
+		}
+	}
+	return up, err
+}
+
+var gwConnLogged, gwConnErrs, gwUDPLogged atomic.Int64
+
+func (g *gateway) tcpDialVia(host string, dst netip.AddrPort) (net.Conn, string, error) {
 	c := g.cfg.Load()
 	target := dst.String()
 	if host != "" && net.ParseIP(host) == nil {
@@ -381,26 +412,31 @@ func (g *gateway) tcpDial(host string, dst netip.AddrPort) (net.Conn, error) {
 	// игры: соединения без имени (свои протоколы игр) и сервисы платформ — с домашнего адреса
 	if c.GamesDir && (host == "" || isGameHost(host)) && !(host != "" && isGeoHost(host)) {
 		if up, err := g.nativeTCP(target); err == nil {
-			return up, nil
+			return up, "напрямую (дом. адрес)", nil
 		}
 	}
 	var ports []int
+	via := "с компьютера"
 	switch {
 	case host != "" && hostBypassed(host, c.Bypass):
 	case host != "" && isGeoHost(host):
-		ports = c.GeoHTTP
+		ports, via = c.GeoHTTP, "зарубежный сервер"
 		if len(ports) == 0 && c.Mode == "vpn" {
-			ports = c.HTTP
+			ports, via = c.HTTP, "VPN"
 		}
 	case c.Mode == "vpn":
-		ports = c.HTTP
+		ports, via = c.HTTP, "VPN"
 	}
 	for _, p := range ports {
 		if up, err := httpConnect(p, target); err == nil {
-			return up, nil
+			return up, via, nil
 		}
 	}
-	return net.DialTimeout("tcp", target, 10*time.Second)
+	if len(ports) > 0 {
+		via += " не ответил → с компьютера"
+	}
+	up, err := net.DialTimeout("tcp", target, 10*time.Second)
+	return up, via, err
 }
 
 func httpConnect(port int, target string) (net.Conn, error) {
@@ -450,6 +486,9 @@ func (g *gateway) udpDial(c *gwConfig, dst netip.AddrPort) (udpUpstream, error) 
 			if s, err := socksUDPDial(p, dst); err == nil {
 				return s, nil
 			}
+		}
+		if len(c.Socks) > 0 && gwUDPWarned.CompareAndSwap(false, true) {
+			gwLog("UDP через VPN не открылся (сервер не пропускает UDP?) — %s идёт напрямую", dst)
 		}
 	}
 	u, err := net.DialUDP("udp4", nil, net.UDPAddrFromAddrPort(dst))

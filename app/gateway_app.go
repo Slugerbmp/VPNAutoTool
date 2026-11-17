@@ -27,7 +27,7 @@ var gwMgr = struct {
 func (a *App) settingsGateway() (on, games bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.settings.Gateway, !a.settings.GwGamesVPN
+	return a.settings.Gateway, a.settings.GwGamesDirect
 }
 
 func ifIndexOf(ip string) int {
