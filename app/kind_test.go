@@ -17,3 +17,10 @@ func TestKinds(t *testing.T) {
 		}
 	}
 }
+
+func TestStartServer(t *testing.T) {
+	s := []*Server{{Name: "info", Kind: "info"}, {Name: "A"}, {Name: "B"}, {Name: "BY", Kind: "cis"}}
+	if startServer(s, "", "B") != 2 || startServer(s, "", "") != 1 || startServer(s, "BY", "B") != 3 || startServer(s, "", "BY") != 1 || startServer(s, "", "gone") != 1 {
+		t.Fatal("start server")
+	}
+}

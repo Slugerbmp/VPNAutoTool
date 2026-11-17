@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	appVersion = "1.11.1"
+	appVersion = "1.11.2"
 	uiAddr     = "127.0.0.1:47321"
 	proxyAddr  = "127.0.0.1:10820" // сюда смотрит системный прокси Windows
 	probeURL   = "https://www.gstatic.com/generate_204"
@@ -106,6 +106,7 @@ type Settings struct {
 	ShareCons    bool      `json:"shareConsole"`
 	Gateway      bool      `json:"gateway"`
 	NoAutoUpdate bool      `json:"noAutoUpdate"`
+	LastServer   string    `json:"lastServer,omitempty"`
 	GwGamesVPN   bool      `json:"gatewayGamesVpn"`
 	TgOn         bool      `json:"tgOn"`
 	Notify       *bool     `json:"notify,omitempty"`
@@ -458,14 +459,51 @@ func (a *App) applyServers(servers []*Server) {
 	}
 	go func() { vpnServerIPs = resolveServerIPs(servers) }()
 	a.mu.Lock()
+	// сразу подключаемся к серверу, на котором работали в прошлый раз (до закрытия программы
+	// или до обновления подписки), — не дожидаясь первой проверки всех серверов
+	prev := a.settings.LastServer
+	if a.cur >= 0 && a.cur < len(a.servers) {
+		prev = a.servers[a.cur].Name
+	}
 	a.servers = servers
 	a.cfg = cfg
 	a.gen++
-	a.cur = 0
+	a.cur = startServer(servers, a.settings.Pinned, prev)
 	a.status = fmt.Sprintf("Серверов: %d. Проверяю пинг…", len(servers))
 	a.errMsg = ""
 	a.mu.Unlock()
 	go a.probeAll()
+}
+
+// Сервер для старта: закреплённый, иначе прошлый, иначе первый «обычный» (не служебный, не СНГ).
+func startServer(servers []*Server, pinned, prev string) int {
+	for _, want := range []string{pinned, prev} {
+		if want == "" {
+			continue
+		}
+		for i, s := range servers {
+			if s.Name == want && (s.Kind == "" || want == pinned) {
+				return i
+			}
+		}
+	}
+	for i, s := range servers {
+		if s.Kind == "" {
+			return i
+		}
+	}
+	return 0
+}
+
+// Запомнить текущий сервер — с него программа начнёт при следующем запуске (вызывать под a.mu).
+func (a *App) rememberCur() {
+	if a.cur < 0 || a.cur >= len(a.servers) || a.servers[a.cur].Ping <= 0 {
+		return
+	}
+	if n := a.servers[a.cur].Name; n != a.settings.LastServer {
+		a.settings.LastServer = n
+		a.saveSettings()
+	}
 }
 
 func (a *App) refresher() {
@@ -840,6 +878,7 @@ func (a *App) probeAll() {
 		a.servers[i].Err = errs[i]
 	}
 	a.choose()
+	a.rememberCur()
 	alive := 0
 	for _, s := range a.servers {
 		if s.Ping > 0 {
@@ -1204,6 +1243,7 @@ func (a *App) routes() *http.ServeMux {
 		if req.Name == "" {
 			a.choose()
 		}
+		a.rememberCur()
 		a.mu.Unlock()
 		writeJSON(w, map[string]any{"ok": true})
 	})
