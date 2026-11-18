@@ -83,7 +83,13 @@ func consoleDomains() map[string]bool {
 // (или WARP), чтобы вход шёл с зарубежного адреса. Остальное Xbox Live — напрямую.
 // Проверку региона Microsoft делает не только на серверах входа, поэтому через зарубежный
 // выход ведём все службы аккаунта Xbox (кроме скачивания игр — они тяжёлые и региона не проверяют).
-var consoleGeo = []string{"xboxlive.com", "xbox.com", "xboxservices.com", "xboxab.com", "gamepass.com", "xbox.net",
+var consoleGeo = []string{
+	// TikTok не показывает ленту российским адресам — тоже только через зарубежный выход
+	"tiktok.com", "tiktokv.com", "tiktokv.us", "tiktokv.eu", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com",
+	"tiktokw.us", "tiktokw.eu", "tiktokd.org", "tiktokd.net", "tik-tokapi.com", "ttwstatic.com", "musical.ly", "muscdn.com",
+	"byteoversea.com", "byteoversea.net", "ibytedtos.com", "ibyteimg.com", "ipstatp.com", "bytefcdn-oversea.com",
+	"byteintlapi.com", "bytegecko-i18n.com", "isnssdk.com", "sgsnssdk.com", "tiktokrow-cdn.com", "tiktokeu-cdn.com", "ttlivecdn.com",
+	"xboxlive.com", "xbox.com", "xboxservices.com", "xboxab.com", "gamepass.com", "xbox.net",
 	"live.com", "live.net", "microsoftonline.com", "msauth.net", "msftauth.net", "msidentity.com", "gfx.ms",
 	"mp.microsoft.com", "xboxlive.cn", "account.microsoft.com", "login.microsoft.com", "storeedgefd.dsx.mp.microsoft.com"}
 
@@ -279,6 +285,7 @@ func dnsServe(u *net.UDPConn) {
 		cons.Lock()
 		cons.queries++
 		cons.Unlock()
+		devSeen(from.IP.String(), "DNS", false)
 		go func() {
 			if r := dnsAnswer(q); r != nil {
 				u.WriteToUDP(r, from)
@@ -432,7 +439,7 @@ func acceptLoop(ln net.Listener, port int) {
 		if err != nil {
 			return
 		}
-		go consoleConn(c, port)
+		go consoleConn(trackConn(c, "DNS"), port)
 	}
 }
 
@@ -619,4 +626,13 @@ func pipe(a, b net.Conn) {
 	go func() { io.Copy(a, b); done <- struct{}{} }()
 	go func() { io.Copy(b, a); done <- struct{}{} }()
 	<-done
+}
+
+// consoleRefreshDomains — после изменения списков сайтов приставки сразу получают новый список.
+func consoleRefreshDomains() {
+	cons.Lock()
+	if cons.on {
+		cons.domains = consoleDomains()
+	}
+	cons.Unlock()
 }

@@ -232,6 +232,7 @@ var hsTGListener net.Listener
 
 func serveTGRelay(c net.Conn) {
 	defer c.Close()
+	c = trackConn(c, "Telegram")
 	_, port, secret := tgwsConf()
 	if secret == "" || !tgwsRunning() {
 		return
@@ -272,6 +273,7 @@ func hotspotProxyAddr() string {
 // (через запрет и WARP, раз соединение исходит от компьютера).
 func (a *App) serveHotspotConn(c net.Conn) {
 	defer c.Close()
+	c = trackConn(c, "прокси")
 	br := bufio.NewReader(c)
 	c.SetReadDeadline(time.Now().Add(30 * time.Second))
 	head, err := br.Peek(5)
@@ -342,7 +344,7 @@ func directProxy(c net.Conn, br *bufio.Reader) {
 		}
 		c.SetReadDeadline(time.Time{})
 		if req.Method == http.MethodConnect {
-			up, err := net.DialTimeout("tcp", req.Host, 15*time.Second)
+			up, err := dialShare(req.Host)
 			if err != nil {
 				c.Write([]byte("HTTP/1.1 502 Bad Gateway\r\n\r\n"))
 				return
@@ -427,7 +429,7 @@ func socksDirect(c net.Conn, br *bufio.Reader) {
 		return
 	}
 	target := net.JoinHostPort(host, strconv.Itoa(int(pb[0])<<8|int(pb[1])))
-	up, err := net.DialTimeout("tcp", target, 15*time.Second)
+	up, err := dialShare(target)
 	if err != nil {
 		c.Write([]byte{5, 5, 0, 1, 0, 0, 0, 0, 0, 0})
 		return
@@ -441,4 +443,13 @@ func socksDirect(c net.Conn, br *bufio.Reader) {
 		br.Discard(n)
 	}
 	pipe(c, up)
+}
+
+// dialShare — соединение раздачи в режиме запрета: с компьютера (через запрет и WARP), а сайты,
+// которым нужен зарубежный адрес (TikTok, вход Xbox), — через зарубежный выход.
+func dialShare(target string) (net.Conn, error) {
+	if h, _, err := net.SplitHostPort(target); err == nil && isGeoHost(h) {
+		return app.dialGeo(target)
+	}
+	return net.DialTimeout("tcp", target, 15*time.Second)
 }

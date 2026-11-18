@@ -729,7 +729,7 @@ func (a *App) hotspotView() map[string]any {
 	defer zi.mu.Unlock()
 	return map[string]any{"supported": true, "on": zi.hsOn, "busy": zi.hsBusy, "error": zi.hsErr,
 		"lan": zi.hsLAN, "note": zi.hsNote, "preferLan": preferLAN,
-		"ssid": zi.hsInfo.Ssid, "pass": zi.hsInfo.Pass, "clients": zi.hsInfo.Clients, "proxy": pxy, "tg": tgMT, "tgSocks": tgSocks,
+		"ssid": zi.hsInfo.Ssid, "pass": zi.hsInfo.Pass, "clients": zi.hsInfo.Clients, "proxy": pxy, "tg": tgMT, "tgSocks": tgSocks, "devices": devicesView(),
 		"console": consOn, "dns": cip, "dnsErr": cerr, "dnsQ": cq, "dns2": routerGuess(cip), "geo": gv, "gw": gwv}
 }
 
@@ -811,8 +811,16 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 		a.settings.ZExtra = list
 		a.saveSettings()
 		zapretExtra = append([]string{}, list...)
-		strategy, warp := a.settings.ZStrategy, a.settings.Warp
+		strategy, warp, servers := a.settings.ZStrategy, a.settings.Warp, a.servers
 		a.mu.Unlock()
+		consoleRefreshDomains()
+		go func() {
+			if len(servers) > 0 { // VPN: эти сайты — всегда через сервер
+				a.loadMu.Lock()
+				a.applyServers(servers)
+				a.loadMu.Unlock()
+			}
+		}()
 		if zapretSupported && winwsRunning() && !a.zapretBusy() && strategy != "" {
 			go zapretRun(zCmd{Action: "start", Strategy: strategy, Warp: warp}, 25*time.Second)
 		}
@@ -899,6 +907,7 @@ func (a *App) extraRoutes(m *http.ServeMux) {
 		bypassList = append([]string{}, list...)
 		on, servers, strategy, warp := a.on, a.servers, a.settings.ZStrategy, a.settings.Warp
 		a.mu.Unlock()
+		consoleRefreshDomains()
 		go func() {
 			if on {
 				setSysProxy(true)

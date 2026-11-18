@@ -43,6 +43,11 @@ func bypassProxyOverride() string { // для Windows ProxyOverride
 
 // Дополнительные домены (Кинопаб, Instagram, Telegram) — подмешиваются ко всем стратегиям.
 var vpnautoDomains = []string{
+	// TikTok
+	"tiktok.com", "tiktokv.com", "tiktokv.us", "tiktokv.eu", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com",
+	"tiktokw.us", "tiktokw.eu", "tiktokd.org", "tiktokd.net", "tik-tokapi.com", "ttwstatic.com", "musical.ly", "muscdn.com",
+	"byteoversea.com", "byteoversea.net", "ibytedtos.com", "ibyteimg.com", "ipstatp.com", "bytefcdn-oversea.com",
+	"byteintlapi.com", "bytegecko-i18n.com", "isnssdk.com", "sgsnssdk.com", "tiktokrow-cdn.com", "tiktokeu-cdn.com", "ttlivecdn.com",
 	// Кинопаб
 	"kino.pub", "kino.watch", "kinopub.me", "kinopub.com", "kinopub.ru", "kinopub.tv", "kinopub.net", "kinopub.io", "service-kp.com",
 	// Instagram / Meta

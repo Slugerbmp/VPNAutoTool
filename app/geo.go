@@ -258,7 +258,7 @@ func (a *App) dialGeo(target string) (net.Conn, error) {
 			c, err = dialViaCore(r.idx, target)
 		}
 		if err == nil {
-			log.Printf("вход Xbox: %s → %s %s", target, r.name, r.country)
+			log.Printf("зарубежный выход: %s → %s %s", target, r.name, r.country)
 			geo.Lock()
 			geo.lastRoute = r.name
 			if r.country != "" {
@@ -267,7 +267,7 @@ func (a *App) dialGeo(target string) (net.Conn, error) {
 			geo.Unlock()
 			return c, nil
 		}
-		log.Printf("вход Xbox: выход %q не сработал: %v", r.name, err)
+		log.Printf("зарубежный выход %q не сработал: %v", r.name, err)
 	}
 	// зарубежного выхода нет — хотя бы напрямую (вход, скорее всего, не пройдёт)
 	return net.DialTimeout("tcp", target, 10*time.Second)

@@ -203,11 +203,6 @@
         <select id="zSel" title="Стратегия обхода"></select>
         <div class="row"><button class="btn" id="zTest">Подобрать лучшую</button><span class="grow"></span><button class="lnk" id="zUpd">Обновления</button></div>
         <div class="note" id="zVer"></div>
-        <details style="margin-top:8px"><summary>Свои сайты для запрета (<span id="zxCount">0</span>)</summary>
-          <div class="note" style="margin:6px 0 0">Если сайт не открывается с запретом — впишите его домен (по одному в строке). Сайт, заблокированный по IP, запрет не откроет — тогда нужен VPN или WARP.</div>
-          <textarea id="zxIn" spellcheck="false" placeholder="например: kino.watch"></textarea>
-          <div class="row"><button class="btn" id="zxSave">Сохранить</button><span class="note" id="zxOk" style="margin:0"></span></div>
-        </details>
       </div>
     </section>
     <section class="sec" data-k="warp" data-mode="zapret">
@@ -215,14 +210,21 @@
       <div class="note err" id="warpNote" hidden style="margin:-4px 2px 10px"></div>
     </section>
 
-    <!-- общие -->
-    <section class="sec" data-k="tg" id="tgSec" hidden>
-      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">TG WS Proxy</span><span class="sum" id="tgSum"></span><label class="sw"><input type="checkbox" id="tg"><span></span></label></div>
+    <!-- сайты -->
+    <section class="sec" data-k="bp">
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Сайты</span><span class="sum" id="bpSum"></span></div>
       <div class="sb">
-        <div class="note" style="margin:0 0 8px">Ускоряет Telegram Desktop: его трафик идёт через WebSocket. Нужно один раз подключить Telegram к прокси.</div>
-        <div class="row"><button class="btn" id="tgLink">Подключить Telegram</button><span class="note" id="tgNote" style="margin:0"></span></div>
+        <div class="note" style="margin:0">Через обход (<span id="zxCount">0</span>) — эти сайты всегда идут в обход блокировок: в режиме VPN — через сервер (даже российские), в режиме запрета — через запрет, на приставках и в раздаче — через этот ПК. По одному домену в строке.</div>
+        <textarea id="zxIn" spellcheck="false" placeholder="например: kino.watch"></textarea>
+        <div class="row"><button class="btn" id="zxSave">Сохранить</button><span class="note" id="zxOk" style="margin:0"></span></div>
+        <div class="note">Исключения (<span id="bpCount">0</span>) — сайты, для которых программа ничего не меняет: идут напрямую. По одному домену в строке.</div>
+        <textarea id="bpIn" spellcheck="false"></textarea>
+        <div class="row"><button class="btn" id="bpSave">Сохранить</button><span class="note" id="bpOk" style="margin:0"></span></div>
+        <div class="note">Сайт, заблокированный по IP, запрет не откроет — для него нужен VPN или WARP.</div>
       </div>
     </section>
+
+    <!-- раздача и сервисы -->
     <section class="sec" data-k="hs" id="hsSec" hidden>
       <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Раздать доступ</span><span class="sum" id="hsSum"></span><label class="sw"><input type="checkbox" id="hs"><span></span></label></div>
       <div class="sb">
@@ -231,9 +233,22 @@
         <div class="line" id="gwRow"><span class="grow mut">Режим шлюза: весь трафик приставки через ПК (Discord, голос, всё)</span><label class="sw"><input type="checkbox" id="hsGw"><span></span></label></div>
         <div class="line" id="gwGamesRow"><span class="grow mut">Игры напрямую, мимо VPN (меньше пинг; если игра не пускает в онлайн — выключите)</span><label class="sw"><input type="checkbox" id="hsGwGames"><span></span></label></div>
         <div id="hsText" class="note" style="margin:0"></div>
+        <div id="devBox" hidden>
+          <div class="note">Подключённые устройства (<span id="devCount">0</span>)</div>
+          <div id="devList"></div>
+        </div>
         <div class="box" id="hsBox" hidden></div>
       </div>
     </section>
+    <section class="sec" data-k="tg" id="tgSec" hidden>
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">TG WS Proxy</span><span class="sum" id="tgSum"></span><label class="sw"><input type="checkbox" id="tg"><span></span></label></div>
+      <div class="sb">
+        <div class="note" style="margin:0 0 8px">Ускоряет Telegram Desktop: его трафик идёт через WebSocket. Нужно один раз подключить Telegram к прокси.</div>
+        <div class="row"><button class="btn" id="tgLink">Подключить Telegram</button><span class="note" id="tgNote" style="margin:0"></span></div>
+      </div>
+    </section>
+
+    <!-- автоматизация и программа -->
     <section class="sec" data-k="rules">
       <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Правила</span><span class="sum" id="rulesSum"></span></div>
       <div class="sb">
@@ -252,38 +267,37 @@
     <section class="sec" data-k="set">
       <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Настройки</span><span class="sum"></span></div>
       <div class="sb">
-        <div class="line" style="padding-top:0"><span class="grow">Запускать вместе с системой<span class="note" style="display:block;margin:0">и сразу включать запрет (без WARP)</span></span><label class="sw"><input type="checkbox" id="oAuto"><span></span></label></div>
+        <div class="note" style="margin:0">Запуск и обновления</div>
+        <div class="line"><span class="grow">Запускать вместе с системой<span class="note" style="display:block;margin:0">и сразу включать запрет (без WARP)</span></span><label class="sw"><input type="checkbox" id="oAuto"><span></span></label></div>
         <div class="line"><span class="grow">Обновляться автоматически<span class="note" style="display:block;margin:0" id="updNote"></span></span><label class="sw"><input type="checkbox" id="oUpd"><span></span></label></div>
         <div class="row"><button class="btn" id="updCheck">Проверить обновления</button><button class="btn" id="updGo" hidden>Обновить</button></div>
+        <div class="note">Подключение</div>
         <div class="line" id="oFbRow"><span class="grow">Резерв: запрет, если VPN упал<span class="note" style="display:block;margin:0">вернусь на VPN, когда он оживёт</span></span><label class="sw"><input type="checkbox" id="oFb"><span></span></label></div>
+        <div class="grid2">
+          <span class="mut">Автовыбор сервера</span><select id="oBy"><option value="ping">по пингу</option><option value="speed">по скорости (после теста)</option></select>
+        </div>
+        <div class="note">Внешний вид и управление</div>
         <div class="line"><span class="grow">Уведомления</span><label class="sw"><input type="checkbox" id="oNotify"><span></span></label></div>
         <div class="line" id="oHkRow"><span class="grow">Горячая клавиша <b style="font-weight:500">Ctrl+Alt+V</b></span><label class="sw"><input type="checkbox" id="oHk"><span></span></label></div>
         <div class="grid2">
-          <span class="mut">Автовыбор сервера</span><select id="oBy"><option value="ping">по пингу</option><option value="speed">по скорости (после теста)</option></select>
           <span class="mut">Тема</span><select id="oTheme"><option value="">как в системе</option><option value="dark">тёмная</option><option value="light">светлая</option></select>
         </div>
       </div>
     </section>
-    <section class="sec" data-k="bp">
-      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Исключения</span><span class="sum" id="bpSum"></span></div>
-      <div class="sb">
-        <div class="note" style="margin:0">Сайты, для которых программа ничего не меняет — по одному домену в строке.</div>
-        <textarea id="bpIn" spellcheck="false"></textarea>
-        <div class="row"><button class="btn" id="bpSave">Сохранить</button><span class="note" id="bpOk" style="margin:0"></span></div>
-      </div>
-    </section>
     <section class="sec" data-k="diag">
-      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Диагностика</span><span class="sum">журналы</span></div>
+      <div class="sh"><svg class="chev" viewBox="0 0 16 16"><path d="M6 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span class="tt">Диагностика</span><span class="sum">журналы, починка</span></div>
       <div class="sb">
-        <div class="note" style="margin:0">Ядро VPN</div><pre id="logCore">…</pre>
-        <div class="note">Программа</div><pre id="logApp">…</pre>
-        <div class="note" id="logZt" hidden>Запрет</div><pre id="logZap" hidden></pre>
-        <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
+        <div class="row" style="margin-top:0"><button class="btn" id="logBtn">Скачать журналы</button><span class="note" id="logNote" style="margin:0 0 0 10px">архив появится в «Загрузках» — отправьте его разработчику (ключи подписки в него не попадают)</span></div>
         <div class="row"><button class="btn" id="repBtn">Починить файлы</button><span class="note" style="margin:0 0 0 10px">скачает недостающее и исправит то, что удалил антивирус</span></div>
         <pre id="repLog" hidden></pre>
-        <div class="row"><button class="btn" id="logBtn">Скачать журналы</button><span class="note" id="logNote" style="margin:0 0 0 10px">архив появится в «Загрузках» — отправьте его разработчику (ключи подписки в него не попадают)</span></div>
         <div class="row" id="defRow"><button class="lnk" id="defBtn">Добавить NETtool в исключения Защитника Windows</button><span class="note" id="defNote" style="margin:0 0 0 8px"></span></div>
         <div class="note" id="avNote" hidden></div>
+        <details style="margin-top:8px"><summary>Журналы</summary>
+          <div class="note" style="margin:6px 0 0">Ядро VPN</div><pre id="logCore">…</pre>
+          <div class="note">Программа</div><pre id="logApp">…</pre>
+          <div class="note" id="logZt" hidden>Запрет</div><pre id="logZap" hidden></pre>
+          <div class="row"><button class="lnk" id="logOpen">Открыть папку журналов</button><span class="grow"></span><button class="lnk" id="logRef">Обновить</button></div>
+        </details>
       </div>
     </section>
   </div>
@@ -585,6 +599,19 @@ function render(){
       : h.on ? (h.lan ? 'Раздаётся в локальную сеть' : `Wi-Fi точка доступа, устройств: ${h.clients || 0}`) + ` · трафик идёт через: ${via}`
       : 'Телефоны и другие устройства пойдут через VPN, запрет или запрет + WARP этого компьютера.';
     $('hsText').className = h.error ? 'note err' : 'note';
+    // подключённые устройства
+    const devs = h.devices || [];
+    $('devBox').hidden = !devs.length; $('devCount').textContent = devs.filter(d => d.online).length + ' из ' + devs.length;
+    const dl = $('devList'); dl.textContent = '';
+    const fmtB = b => b > 1 << 30 ? (b / (1 << 30)).toFixed(1) + ' ГБ' : b > 1 << 20 ? (b / (1 << 20)).toFixed(1) + ' МБ' : b > 1024 ? Math.round(b / 1024) + ' КБ' : '';
+    const ago = s => s < 120 ? 'сейчас' : s < 3600 ? Math.round(s / 60) + ' мин назад' : Math.round(s / 3600) + ' ч назад';
+    devs.forEach(d => {
+      const ln = el('div', 'line');
+      const nm = el('span', 'grow'); nm.append(el('span', '', (d.online ? '● ' : '○ ') + (d.name || d.ip)));
+      nm.append(el('span', 'note', [d.name ? d.ip : '', d.mac, d.via].filter(Boolean).join(' · '))); nm.lastChild.style.cssText = 'display:block;margin:0';
+      ln.append(nm, el('span', 'mut', [fmtB(d.bytes), ago(d.ago)].filter(Boolean).join(' · ')));
+      dl.append(ln);
+    });
     const box = $('hsBox'); box.hidden = !h.on; box.textContent = '';
     if (h.on) {
       const add = (a, b) => { const d = el('div'); d.append(a); if (b) d.append(el('b', '', b)); box.append(d); };
@@ -648,7 +675,10 @@ function render(){
   }
 
   // исключения
-  $('bpSum').textContent = (st.bypass || []).join(', ') || 'нет';
+  $('zxCount').textContent = (st.zextra || []).length;
+  if (document.activeElement !== $('zxIn')) $('zxIn').value = (st.zextra || []).join('\n');
+  $('bpCount').textContent = (st.bypass || []).length;
+  $('bpSum').textContent = 'через обход: ' + (st.zextra || []).length + ' · исключения: ' + (st.bypass || []).length;
   if (document.activeElement !== $('bpIn')) $('bpIn').value = (st.bypass || []).join('\n');
 
   // мини-окно
@@ -689,8 +719,6 @@ function renderZapret(z){
   }
   sel.disabled = z.busy || !(z.strategies || []).length;
   $('zTest').disabled = !!z.busy;
-  $('zxCount').textContent = (st.zextra || []).length;
-  if (document.activeElement !== $('zxIn')) $('zxIn').value = (st.zextra || []).join('\n');
   $('zVer').textContent = z.installed ? 'Версия ' + (z.version || '?') + (z.latest && z.latest !== z.version ? ' · выходит ' + z.latest + ', обновлю сам' : ' · актуальная') : '';
 
   $('defRow').hidden = !z.supported;

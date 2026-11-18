@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -129,6 +130,11 @@ func (a *App) gatewaySync() {
 	writeGWConfig(a.gwBuildConfig(pc, idx))
 	st := readGWState()
 	alive := st.PID > 0 && st.Err == "" && time.Since(time.Unix(st.TS, 0)) < 8*time.Second
+	if alive && st.Clients != "" {
+		for _, ip := range strings.Split(st.Clients, ",") {
+			devSeen(strings.TrimSpace(ip), "шлюз", false)
+		}
+	}
 	gwMgr.Lock()
 	gwMgr.running, gwMgr.ifIdx = true, idx
 	if st.Err != "" {

@@ -456,6 +456,17 @@ func buildConfig(servers []*Server, directRu bool) []byte {
 		}
 		rules = append(rules, map[string]any{"type": "field", "domain": ds, "outboundTag": "direct"})
 	}
+	// «Сайты через обход» — всегда через VPN, даже если это российский домен
+	if len(zapretExtra) > 0 {
+		var ds []string
+		for _, d := range zapretExtra {
+			ds = append(ds, "domain:"+d)
+		}
+		for i := range servers {
+			rules = append(rules, map[string]any{"type": "field", "domain": ds,
+				"inboundTag": []string{fmt.Sprintf("in-%d", i), fmt.Sprintf("sk-%d", i)}, "outboundTag": fmt.Sprintf("srv-%d", i)})
+		}
+	}
 	if directRu {
 		rules = append(rules,
 			map[string]any{"type": "field", "domain": []string{"domain:ru", "domain:su", "domain:xn--p1ai"}, "outboundTag": "direct"},
